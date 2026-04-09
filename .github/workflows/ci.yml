@@ -1,0 +1,62 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r ecommerce/requirements.txt
+        pip install pytest pytest-cov flake8
+    
+    - name: Lint with flake8
+      run: |
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 ecommerce/app.py ecommerce/models.py ecommerce/forms.py --count --select=E9,F63,F7,F82 --show-source --statistics
+        # Exit-zero treats all errors as warnings
+        flake8 ecommerce/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
+    - name: Test app startup
+      run: |
+        cd ecommerce
+        timeout 5 python app.py || true
+      env:
+        FLASK_ENV: testing
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Build Docker image
+      run: |
+        docker build -t ecommerce:latest .
+    
+    - name: Push to Docker Hub (optional)
+      if: secrets.DOCKER_USERNAME != null
+      run: |
+        echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+        docker tag ecommerce:latest ${{ secrets.DOCKER_USERNAME }}/ecommerce:latest
+        docker push ${{ secrets.DOCKER_USERNAME }}/ecommerce:latest

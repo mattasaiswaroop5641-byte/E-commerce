@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: ecommerce-app
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_APP=app.py
+    volumes:
+      - ./ecommerce:/app
+    command: flask run --host=0.0.0.0
+    restart: unless-stopped
+    networks:
+      - ecommerce-network
+
+  # Optional: Add a database service if needed
+  # db:
+  #   image: sqlite3
+  #   container_name: ecommerce-db
+  #   networks:
+  #     - ecommerce-network
+
+networks:
+  ecommerce-network:
+    driver: bridge

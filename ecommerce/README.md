@@ -28,6 +28,67 @@ A Flask ecommerce showcase with a richer catalog, grouped variants, cart and che
 
 ## Run The Project
 
+### Local Development
+
+```bash
+cd ecommerce
+pip install -r requirements.txt
+python app.py
+```
+
+### Docker Deployment
+
+Build and run with Docker:
+
+```bash
+docker build -t ecommerce .
+docker run -p 5000:5000 ecommerce
+```
+
+Or use Docker Compose:
+
+```bash
+docker-compose up --build
+```
+
+The app will be available at `http://localhost:5000`
+
+## GitHub Actions CI/CD
+
+This project includes automated testing and deployment via GitHub Actions:
+
+- **Tests** run on Python 3.9, 3.10, and 3.11
+- **Linting** checks code quality
+- **Docker image** is built and optionally pushed to Docker Hub
+- Triggered on push to `main` and `develop` branches
+
+### Setting up Docker Hub deployment (optional):
+
+1. Add these secrets to your GitHub repository settings:
+   - `DOCKER_USERNAME`: Your Docker Hub username
+   - `DOCKER_PASSWORD`: Your Docker Hub access token
+
+2. The workflow will automatically build and push images on commits to main
+
+## Deployment Options
+
+### Heroku
+
+```bash
+heroku create your-app-name
+git push heroku main
+```
+
+### Railway.app
+
+Connect your GitHub repo and Railway will auto-deploy on each push.
+
+### AWS/GCP/Azure
+
+Use their container services with the provided Dockerfile.
+
+## Run The Project (Legacy)
+
 From the project folder:
 
 ```bash

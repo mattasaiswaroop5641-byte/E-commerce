@@ -7,4 +7,7 @@ Flask-Login
 Flask-WTF
 Werkzeug
 email_validator
+gunicorn
+flask-cors
+python-dotenv
 
