@@ -9,6 +9,7 @@ A Flask-based e-commerce application with product recommendations and checkout f
 ## 🚀 Quick Start
 
 ### Local Development
+
 ```bash
 cd ecommerce
 pip install -r requirements.txt
@@ -16,6 +17,7 @@ python app.py
 ```
 
 ### Docker
+
 ```bash
 docker build -t ecommerce .
 docker run -p 5000:5000 ecommerce
@@ -50,6 +52,7 @@ docker run -p 5000:5000 ecommerce
 ## 🔄 CI/CD Pipeline
 
 GitHub Actions automatically:
+
 - Tests on Python 3.9, 3.10, 3.11
 - Runs code linting
 - Builds Docker images
@@ -60,22 +63,26 @@ GitHub Actions automatically:
 ## 📦 Deployment Options
 
 ### Option 1: Docker (Recommended)
+
 ```bash
 docker build -t ecommerce .
 docker run -p 5000:5000 ecommerce
 ```
 
 ### Option 2: Railway.app
+
 1. Connect your GitHub repo to Railway
 2. Auto-deploys on each push
 3. [Railway.app](https://railway.app)
 
 ### Option 3: Render
+
 1. Create account at [render.com](https://render.com)
 2. Connect GitHub repository
 3. Set startup command: `gunicorn app:app`
 
 ### Option 4: Heroku
+
 ```bash
 heroku create your-app-name
 git push heroku main
@@ -83,7 +90,7 @@ git push heroku main
 
 ## 📂 Project Structure
 
-```
+```tree
 ecommerce/
 ├── app.py                 # Main Flask app
 ├── models.py             # Database models
@@ -101,7 +108,8 @@ ecommerce/
 ## 🔐 Environment Variables
 
 Create a `.env` file:
-```
+
+```bash
 FLASK_ENV=development
 FLASK_APP=app.py
 SECRET_KEY=your-secret-key-here

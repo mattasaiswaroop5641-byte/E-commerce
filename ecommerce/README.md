@@ -87,7 +87,7 @@ Connect your GitHub repo and Railway will auto-deploy on each push.
 
 Use their container services with the provided Dockerfile.
 
-## Run The Project (Legacy)
+## Additional Info
 
 From the project folder:
 
