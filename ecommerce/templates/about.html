@@ -1,0 +1,280 @@
+{% extends 'base.html' %}
+
+{% block title %}About {{ site_name }}{% endblock %}
+
+{% block page_content %}
+<div class="container-xxl page-view">
+    <div class="page-hero about-hero">
+        <div class="page-hero__content">
+            <h1 class="page-hero__title">About {{ site_name }}</h1>
+            <p class="page-hero__subtitle">Premium shopping experience with AI-powered recommendations</p>
+        </div>
+    </div>
+
+    <div class="about-section">
+        <div class="container-xxl">
+            <div class="row g-5 align-items-center mb-5">
+                <div class="col-lg-6">
+                    <h2 class="section-title">What is {{ site_name }}?</h2>
+                    <p class="section-text">
+                        {{ site_name }} is a premium e-commerce platform curated for the discerning shopper. We bring together trending products across eight major categories with a focus on quality, variety, and exceptional user experience.
+                    </p>
+                    <p class="section-text">
+                        Built with modern technology and user-first design, {{ site_name }} makes shopping intuitive, secure, and enjoyable.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <div class="about-stats">
+                        <div class="stat-card">
+                            <div class="stat-number">240+</div>
+                            <div class="stat-label">Catalog Variants</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">83</div>
+                            <div class="stat-label">Product Families</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">8</div>
+                            <div class="stat-label">Categories</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="section-divider">
+
+            <div class="row g-5 align-items-center mb-5">
+                <div class="col-lg-6 order-lg-2">
+                    <h2 class="section-title">Why Choose {{ site_name }}?</h2>
+                    <ul class="feature-list">
+                        <li><i class="bi bi-check-circle-fill"></i> <strong>Personalized Recommendations</strong> - AI learns your preferences</li>
+                        <li><i class="bi bi-check-circle-fill"></i> <strong>Curated Selection</strong> - Handpicked products across categories</li>
+                        <li><i class="bi bi-check-circle-fill"></i> <strong>Secure Checkout</strong> - Safe payment processing</li>
+                        <li><i class="bi bi-check-circle-fill"></i> <strong>Smooth Experience</strong> - Fast, responsive design</li>
+                        <li><i class="bi bi-check-circle-fill"></i> <strong>Product Variants</strong> - Multiple options per product</li>
+                        <li><i class="bi bi-check-circle-fill"></i> <strong>Easy Search</strong> - Find what you need instantly</li>
+                    </ul>
+                </div>
+                <div class="col-lg-6 order-lg-1">
+                    <div class="feature-image">
+                        <div class="feature-placeholder">
+                            <i class="bi bi-bag-heart-fill"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="section-divider">
+
+            <div class="row g-5">
+                <div class="col-md-6">
+                    <h3 class="about-subheading">Our Technology</h3>
+                    <p>{{ site_name }} is built with cutting-edge technologies:</p>
+                    <div class="tech-stack-list">
+                        <span class="tech-badge">Flask</span>
+                        <span class="tech-badge">Python</span>
+                        <span class="tech-badge">SQLAlchemy</span>
+                        <span class="tech-badge">scikit-learn</span>
+                        <span class="tech-badge">Bootstrap 5</span>
+                        <span class="tech-badge">SQLite</span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h3 class="about-subheading">AI Recommendations</h3>
+                    <p>We use two advanced recommendation systems:</p>
+                    <ul class="about-list">
+                        <li><strong>Content-Based Filtering</strong> - Finds similar products</li>
+                        <li><strong>Collaborative Filtering</strong> - Learns from user behavior</li>
+                    </ul>
+                </div>
+            </div>
+
+            <hr class="section-divider">
+
+            <div class="about-cta">
+                <h2>Ready to shop?</h2>
+                <p>Start exploring our curated collections today</p>
+                <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg">
+                    Browse Collections
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .about-hero {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        color: white;
+        padding: 80px 20px;
+        text-align: center;
+        margin-bottom: 60px;
+    }
+
+    .about-hero__title {
+        font-size: 3.5rem;
+        font-weight: 800;
+        margin-bottom: 20px;
+        line-height: 1.2;
+    }
+
+    .about-hero__subtitle {
+        font-size: 1.3rem;
+        opacity: 0.9;
+    }
+
+    .about-section {
+        padding: 40px 0;
+    }
+
+    .section-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 25px;
+        color: #1a1a2e;
+    }
+
+    .section-text {
+        font-size: 1.1rem;
+        line-height: 1.8;
+        color: #555;
+        margin-bottom: 20px;
+    }
+
+    .section-divider {
+        margin: 80px 0;
+        border: none;
+        border-top: 2px solid #e0e0e0;
+    }
+
+    .about-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 20px;
+    }
+
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        border-radius: 10px;
+        text-align: center;
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
+    }
+
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin-bottom: 10px;
+    }
+
+    .stat-label {
+        font-size: 0.95rem;
+        opacity: 0.9;
+    }
+
+    .feature-list {
+        list-style: none;
+        padding: 0;
+    }
+
+    .feature-list li {
+        display: flex;
+        align-items: center;
+        font-size: 1.1rem;
+        margin-bottom: 20px;
+        color: #333;
+    }
+
+    .feature-list i {
+        color: #667eea;
+        margin-right: 15px;
+        font-size: 1.3rem;
+    }
+
+    .feature-image {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        border-radius: 15px;
+        padding: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 300px;
+    }
+
+    .feature-placeholder {
+        font-size: 5rem;
+        color: #667eea;
+        opacity: 0.5;
+    }
+
+    .about-subheading {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 15px;
+        color: #1a1a2e;
+    }
+
+    .about-list {
+        list-style: none;
+        padding: 0;
+    }
+
+    .about-list li {
+        margin-bottom: 15px;
+        color: #555;
+        line-height: 1.6;
+    }
+
+    .tech-stack-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .tech-badge {
+        background: #f0f0f0;
+        color: #667eea;
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+
+    .about-cta {
+        text-align: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 60px 40px;
+        border-radius: 15px;
+        margin-top: 80px;
+    }
+
+    .about-cta h2 {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 15px;
+    }
+
+    .about-cta p {
+        font-size: 1.2rem;
+        margin-bottom: 30px;
+        opacity: 0.95;
+    }
+
+    @media (max-width: 768px) {
+        .about-hero__title {
+            font-size: 2rem;
+        }
+
+        .section-title {
+            font-size: 1.8rem;
+        }
+
+        .about-stats {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}

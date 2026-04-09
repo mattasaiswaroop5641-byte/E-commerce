@@ -1084,6 +1084,11 @@ def logout(): # type: ignore
     return redirect(url_for("index"))
 
 
+@app.route("/about")
+def about():
+    return render_template("about.html", site_name=SITE_NAME)
+
+
 @app.route("/search", methods=["GET", "POST"])
 def search():
     ensure_catalog_loaded()
