@@ -47,6 +47,48 @@
                 </div>
             </div>
 
+            <div class="order-tracking-section">
+                <h2>Your order is on the way</h2>
+                <div class="tracking-timeline">
+                    <div class="tracking-step tracking-step--completed">
+                        <div class="tracking-step__marker">
+                            <i class="bi bi-check-lg"></i>
+                        </div>
+                        <div class="tracking-step__content">
+                            <strong>Order Confirmed</strong>
+                            <p>{{ order.placed_at }}</p>
+                        </div>
+                    </div>
+                    <div class="tracking-step tracking-step--active">
+                        <div class="tracking-step__marker">
+                            <i class="bi bi-box-seam"></i>
+                        </div>
+                        <div class="tracking-step__content">
+                            <strong>Processing</strong>
+                            <p>Your order is being prepared for shipment</p>
+                        </div>
+                    </div>
+                    <div class="tracking-step">
+                        <div class="tracking-step__marker">
+                            <i class="bi bi-truck"></i>
+                        </div>
+                        <div class="tracking-step__content">
+                            <strong>Shipped</strong>
+                            <p>Estimated delivery: {{ order.eta }}</p>
+                        </div>
+                    </div>
+                    <div class="tracking-step">
+                        <div class="tracking-step__marker">
+                            <i class="bi bi-house-door"></i>
+                        </div>
+                        <div class="tracking-step__content">
+                            <strong>Delivered</strong>
+                            <p>Expected by {{ order.eta }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="success-order-items">
                 {% for item in order['items'] %}
                     <div class="success-order-item">
