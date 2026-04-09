@@ -82,20 +82,21 @@ class CollabRecommender:
         )
         self.user_ids = [int(user_id) for user_id in pivot.index.to_list()]
         self.product_ids = [int(product_id) for product_id in pivot.columns.to_list()]
-        self.user_index = {user_id: idx for idx, user_id in enumerate(self.user_ids)}
-        self.product_index = {product_id: idx for idx, product_id in enumerate(self.product_ids)}
+        self.user_index = {int(user_id): idx for idx, user_id in enumerate(self.user_ids)}  # type: ignore
+        self.product_index = {int(product_id): idx for idx, product_id in enumerate(self.product_ids)}  # type: ignore
         self.user_seen = {}
         for user_id, row in pivot.iterrows():
             seen_products: set[int] = set()
             for product_id, value in row.items():
                 try:
-                    product_id_int = int(product_id)
+                    product_id_int = int(product_id)  # type: ignore
                     value_float = float(value)
                 except (TypeError, ValueError):
                     continue
                 if value_float > 0:
                     seen_products.add(product_id_int)
-            self.user_seen[int(user_id)] = seen_products
+            user_id_int: int = int(user_id)  # type: ignore
+            self.user_seen[user_id_int] = seen_products
 
         matrix = pivot.values
         if matrix.shape[0] < 2 or matrix.shape[1] < 2:
