@@ -76,6 +76,63 @@
     </div>
 </section>
 
+<section class="section-shell trending-section">
+    <div class="container-xxl">
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">🔥 Trending Now</span>
+                <h2 class="section-title">What everyone's buying today</h2>
+            </div>
+            <a href="{{ url_for('search') }}" class="section-link">View all trending <i class="bi bi-arrow-up-right"></i></a>
+        </div>
+
+        <div class="trending-grid">
+            {% if trending_products %}
+                {% for product in trending_products[:6] %}
+                    <div class="trending-card reveal-up">
+                        <div class="trending-card__media">
+                            <img src="{{ product.image }}"
+                                 alt="{{ product.name }}"
+                                 loading="lazy"
+                                 decoding="async"
+                                 width="280"
+                                 height="280"
+                                 data-placeholder-src="{{ placeholder_image }}"
+                                 onerror="window.handleImageFallback(this);">
+                            {% if product.discount_percent %}
+                                <span class="trending-badge trending-badge--discount">-{{ product.discount_percent }}%</span>
+                            {% endif %}
+                        </div>
+                        <div class="trending-card__content">
+                            <span class="product-category">{{ product.category }}</span>
+                            <h3>{{ product.name }}</h3>
+                            <div class="product-rating">
+                                <div class="stars">
+                                    <i class="bi bi-star-fill"></i>
+                                    <i class="bi bi-star-fill"></i>
+                                    <i class="bi bi-star-fill"></i>
+                                    <i class="bi bi-star-fill"></i>
+                                    <i class="bi bi-star-half"></i>
+                                </div>
+                                <span class="rating-text">4.8</span>
+                            </div>
+                            <div class="product-price">
+                                <span class="price-current">{{ product.price_display }}</span>
+                                {% if product.original_price %}
+                                    <span class="price-original">{{ product.original_price_display }}</span>
+                                {% endif %}
+                            </div>
+                            <a href="{{ url_for('product', product_id=product.product_id) }}" class="btn btn-sm btn-primary w-100">
+                                View Product
+                            </a>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+</section>
+
 <section class="section-shell">
     <div class="container-xxl">
         <div class="section-heading">
