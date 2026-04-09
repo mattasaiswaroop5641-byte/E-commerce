@@ -14,8 +14,8 @@ from recommenders.collab import CollabRecommender
 from recommenders.content_based import ContentRecommender
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "your-secret-key-here"
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///site.db"
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "your-secret-key-here-change-in-production")
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///site.db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app) # type: ignore

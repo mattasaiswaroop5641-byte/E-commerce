@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: shadowmarket
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r ecommerce/requirements.txt
+    startCommand: cd ecommerce && gunicorn app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+      - key: FLASK_ENV
+        value: production
