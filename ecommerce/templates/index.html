@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% from "_product_macros.html" import product_card with context %}
+
+{% block title %}{{ site_name }} | Premium Ecommerce Showcase{% endblock %}
+{% block body_class %}home-page{% endblock %}
+
+{% block content %}
+<section class="hero-section">
+    <div class="container-xxl">
+        <div class="hero-shell reveal-up">
+            <div class="hero-copy">
+                <span class="section-kicker">Shadow-curated storefront</span>
+                <h1>Own the aisle after dark.</h1>
+                <p>
+                    Shop trending products across every major category with premium picks, real variants,
+                    and a smooth cart-to-checkout experience.
+                </p>
+                <div class="hero-actions">
+                    <a href="#catalog" class="btn btn-primary btn-lg">Browse catalog</a>
+                    <a href="{{ url_for('checkout') }}" class="btn btn-outline-light btn-lg">Try checkout</a>
+                </div>
+                <div class="hero-metrics">
+                    <div class="metric-card">
+                        <span class="metric-card__value">{{ catalog_stats.category_count }}</span>
+                        <span class="metric-card__label">live categories</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-card__value">{{ catalog_stats.family_count }}</span>
+                        <span class="metric-card__label">product families</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-card__value">{{ catalog_stats.product_count }}</span>
+                        <span class="metric-card__label">catalog variants</span>
+                    </div>
+                </div>
+            </div>
+
+            {% if hero_product %}
+                <div class="hero-panel">
+                    <span class="hero-panel__eyebrow">Spotlight family</span>
+                    <div class="hero-panel__media">
+                        <img src="{{ hero_product.hero_image }}"
+                             alt="{{ hero_product.name }}"
+                             width="760"
+                             height="760"
+                             decoding="async"
+                             data-fallback-src="{{ hero_product.hero_image_fallback if hero_product.hero_image_fallback is defined else '' }}"
+                             data-placeholder-src="{{ placeholder_image }}"
+                             onerror="window.handleImageFallback(this);">
+                    </div>
+                    <div class="hero-panel__content">
+                        <div class="hero-chip-row">
+                            <span class="hero-chip">{{ hero_product.badge }}</span>
+                            <span class="hero-chip hero-chip--accent">{{ hero_product.discount_percent }}% off</span>
+                            {% if hero_product.variant_count > 1 %}
+                                <span class="hero-chip">{{ hero_product.variant_count }} variants</span>
+                            {% endif %}
+                        </div>
+                        <h2>{{ hero_product.name }}</h2>
+                        <p>{{ hero_product.short_description }}</p>
+                        <div class="hero-panel__price">
+                            <span>{{ hero_product.price_display }}</span>
+                            <span>{{ hero_product.original_price_display }}</span>
+                        </div>
+                        <div class="hero-panel__actions">
+                            <a href="{{ url_for('product', product_id=hero_product.product_id) }}" class="btn btn-dark">Explore options</a>
+                            <form action="{{ url_for('add_to_cart', product_id=hero_product.product_id) }}" method="post">
+                                <input type="hidden" name="next" value="{{ request.path }}">
+                                <button class="btn btn-outline-secondary" type="submit">Add default</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<section class="section-shell">
+    <div class="container-xxl">
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">Featured aisles</span>
+                <h2 class="section-title">Browse categories that feel complete</h2>
+            </div>
+            <a href="{{ url_for('search') }}" class="section-link">View full catalog <i class="bi bi-arrow-up-right"></i></a>
+        </div>
+
+        <div class="category-grid" id="catalog">
+            {% for category in featured_categories %}
+                <a href="{{ url_for('category_products', category_slug=category.slug) }}" class="category-card reveal-up">
+                    <div class="category-card__media">
+                        <img src="{{ category.image }}"
+                             alt="{{ category.name }}"
+                             {% if loop.index <= 2 %}loading="eager"{% else %}loading="lazy"{% endif %}
+                             decoding="async"
+                             width="720"
+                             height="520"
+                             data-fallback-src="{{ category.image_fallback if category.image_fallback is defined else '' }}"
+                             data-placeholder-src="{{ placeholder_image }}"
+                             onerror="window.handleImageFallback(this);">
+                    </div>
+                    <div class="category-card__content">
+                        <span class="category-card__eyebrow">{{ category.eyebrow }}</span>
+                        <div class="category-card__header">
+                            <span class="category-card__icon"><i class="bi {{ category.icon }}"></i></span>
+                            <div>
+                                <h3>{{ category.name }}</h3>
+                                <p>{{ category.family_count }} families <span aria-hidden="true">&bull;</span> {{ category.count }} variants</p>
+                            </div>
+                        </div>
+                        <span class="category-card__link">Explore from {{ category.starting_price_display }}</span>
+                    </div>
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<section class="section-shell section-shell--tinted">
+    <div class="container-xxl">
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">Why it feels premium</span>
+                <h2 class="section-title">Everything you need in one store</h2>
+            </div>
+        </div>
+
+        <div class="service-grid">
+            {% for feature in spotlight_features %}
+                <article class="service-card reveal-up">
+                    <span class="service-card__icon"><i class="bi {{ feature.icon }}"></i></span>
+                    <h3>{{ feature.title }}</h3>
+                    <p>{{ feature.text }}</p>
+                </article>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<section class="section-shell">
+    <div class="container-xxl">
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">Personalized shelf</span>
+                <h2 class="section-title">Recommended for you</h2>
+            </div>
+            <a href="{{ url_for('search') }}" class="section-link">See more <i class="bi bi-arrow-up-right"></i></a>
+        </div>
+        <div class="product-strip">
+            {% for product in recommended_for_you %}
+                {{ product_card(product) }}
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<section class="section-shell">
+    <div class="container-xxl">
+        <div class="promo-banner reveal-up">
+            <div class="promo-banner__copy">
+                <span class="section-kicker">Checkout options</span>
+                <h2>Card, UPI, net banking, and cash on delivery now fit into one cleaner buying flow.</h2>
+                <p>
+                    Browse grouped families, open a variant-rich product page, add the selected option to cart,
+                    and complete your order with secure payment options.
+                </p>
+                <div class="promo-banner__actions">
+                    <a href="{{ url_for('cart') }}" class="btn btn-dark">Open cart</a>
+                    <a href="{{ url_for('checkout') }}" class="btn btn-outline-secondary">Go to checkout</a>
+                </div>
+            </div>
+            <div class="promo-banner__meta">
+                <div class="promo-metric">
+                    <span class="promo-metric__value">4</span>
+                    <span class="promo-metric__label">payment paths</span>
+                </div>
+                <div class="promo-metric">
+                    <span class="promo-metric__value">{{ catalog_stats.family_count }}</span>
+                    <span class="promo-metric__label">browse families</span>
+                </div>
+                <div class="promo-metric">
+                    <span class="promo-metric__value">{{ catalog_stats.product_count }}</span>
+                    <span class="promo-metric__label">variant rows</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-shell">
+    <div class="container-xxl">
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">Trending now</span>
+                <h2 class="section-title">High-energy picks across the catalog</h2>
+            </div>
+        </div>
+        <div class="product-strip">
+            {% for product in trending_products %}
+                {{ product_card(product) }}
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<section class="section-shell">
+    <div class="container-xxl">
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">Smart value</span>
+                <h2 class="section-title">Top deals worth opening right now</h2>
+            </div>
+        </div>
+        <div class="product-strip">
+            {% for product in top_deals %}
+                {{ product_card(product) }}
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<section class="section-shell section-shell--tinted">
+    <div class="container-xxl">
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">Fresh arrivals</span>
+                <h2 class="section-title">Newest additions to the ShadowMarket catalog</h2>
+            </div>
+        </div>
+        <div class="product-strip">
+            {% for product in new_arrivals %}
+                {{ product_card(product) }}
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endblock %}

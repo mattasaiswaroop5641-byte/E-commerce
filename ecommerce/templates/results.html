@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% from "_product_macros.html" import product_card with context %}
+
+{% block title %}
+    {% if category %}
+        {{ category }} | {{ site_name }}
+    {% elif query %}
+        Results for {{ query }} | {{ site_name }}
+    {% else %}
+        Catalog | {{ site_name }}
+    {% endif %}
+{% endblock %}
+
+{% block body_class %}listing-page{% endblock %}
+
+{% block content %}
+<section class="page-hero">
+    <div class="container-xxl">
+        <div class="page-hero__shell reveal-up">
+            <div class="page-hero__copy">
+                <span class="section-kicker">Catalog view</span>
+                <h1>{{ view_title }}</h1>
+                <p>
+                    {% if category %}
+                        Browse grouped {{ category }} families, compare options faster, and open a cleaner product detail page.
+                    {% elif query %}
+                        Search now groups matching variants into tidy browse cards so the catalog is easier to scan.
+                    {% else %}
+                        Browse the full ShadowMarket collection with smarter grouping, sorting, and faster-loading media.
+                    {% endif %}
+                </p>
+            </div>
+            <div class="page-hero__meta">
+                <span class="page-meta-pill">{{ result_count }} families</span>
+                <span class="page-meta-pill">Grouped variants</span>
+                <a href="{{ url_for('cart') }}" class="page-meta-link">Go to cart <i class="bi bi-arrow-right"></i></a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-shell">
+    <div class="container-xxl">
+        <div class="filter-chip-row">
+            {% for category_item in categories %}
+                <a href="{{ url_for('category_products', category_slug=category_item.slug, sort=selected_sort) }}"
+                   class="filter-chip {% if category and category == category_item.name %}is-active{% endif %}">
+                    <i class="bi {{ category_item.icon }}"></i> {{ category_item.name }}
+                </a>
+            {% endfor %}
+        </div>
+
+        <div class="catalog-toolbar reveal-up">
+            <div class="catalog-toolbar__summary">
+                <strong>{{ result_count }} families</strong>
+                {% if query %}
+                    <span>Matching "{{ query }}"</span>
+                {% elif category %}
+                    <span>{{ category }} grouped catalog</span>
+                {% else %}
+                    <span>Full grouped catalog</span>
+                {% endif %}
+                {% if pagination and result_count %}
+                    <span>Showing {{ pagination.start_item }}-{{ pagination.end_item }}</span>
+                {% endif %}
+            </div>
+            <form method="get" action="{{ request.path }}" class="catalog-sort-form">
+                {% if query %}
+                    <input type="hidden" name="query" value="{{ query }}">
+                {% endif %}
+                {% if pagination and pagination.page > 1 %}
+                    <input type="hidden" name="page" value="{{ pagination.page }}">
+                {% endif %}
+                <label for="sort">Sort by</label>
+                <select id="sort" name="sort" class="form-select">
+                    {% for option in sort_options %}
+                        <option value="{{ option.id }}" {% if selected_sort == option.id %}selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+                <button class="btn btn-outline-secondary" type="submit">Apply</button>
+            </form>
+        </div>
+
+        {% if recommendations %}
+            <div class="product-grid product-grid--catalog">
+                {% for product in recommendations %}
+                    {{ product_card(product) }}
+                {% endfor %}
+            </div>
+
+            {% if pagination and pagination.total_pages > 1 %}
+                <nav class="pagination-shell reveal-up" aria-label="Catalog pages">
+                    <div class="pagination-summary">
+                        Page {{ pagination.page }} of {{ pagination.total_pages }}
+                    </div>
+                    <div class="pagination-actions">
+                        {% if pagination.has_prev %}
+                            <a href="{{ pagination.prev_url }}" class="pagination-link">
+                                <i class="bi bi-arrow-left"></i> Previous
+                            </a>
+                        {% else %}
+                            <span class="pagination-link is-disabled">
+                                <i class="bi bi-arrow-left"></i> Previous
+                            </span>
+                        {% endif %}
+
+                        <div class="pagination-pages">
+                            {% for page_link in pagination.pages %}
+                                {% if page_link.is_current %}
+                                    <span class="pagination-link is-active">{{ page_link.number }}</span>
+                                {% else %}
+                                    <a href="{{ page_link.url }}" class="pagination-link">{{ page_link.number }}</a>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+
+                        {% if pagination.has_next %}
+                            <a href="{{ pagination.next_url }}" class="pagination-link">
+                                Next <i class="bi bi-arrow-right"></i>
+                            </a>
+                        {% else %}
+                            <span class="pagination-link is-disabled">
+                                Next <i class="bi bi-arrow-right"></i>
+                            </span>
+                        {% endif %}
+                    </div>
+                </nav>
+            {% endif %}
+        {% else %}
+            <div class="empty-state reveal-up">
+                <div class="empty-state__icon">
+                    <i class="bi bi-search"></i>
+                </div>
+                <h2>No product families matched this view</h2>
+                <p>Try a broader keyword, switch categories, or head back to the curated homepage.</p>
+                <div class="empty-state__actions">
+                    <a href="{{ url_for('index') }}" class="btn btn-primary">Return home</a>
+                    <a href="{{ url_for('search') }}" class="btn btn-outline-secondary">Browse all products</a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

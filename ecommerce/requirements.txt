@@ -1,0 +1,10 @@
+pandas
+numpy
+scikit-learn
+Flask
+Flask-SQLAlchemy
+Flask-Login
+Flask-WTF
+Werkzeug
+email_validator
+

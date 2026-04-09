@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Checkout | {{ site_name }}{% endblock %}
+{% block body_class %}checkout-page{% endblock %}
+
+{% block content %}
+<section class="page-hero">
+    <div class="container-xxl">
+        <div class="page-hero__shell reveal-up">
+            <div class="page-hero__copy">
+                <span class="section-kicker">Secure payment flow</span>
+                <h1>Checkout with confidence</h1>
+                <p>
+                    Complete your purchase with your selected variants while preserving
+                    shipping details, payment selection, and order confirmation.
+                </p>
+            </div>
+            <div class="page-hero__meta">
+                <span class="page-meta-pill">{{ cart_summary.item_count }} items</span>
+                <span class="page-meta-pill">{{ cart_summary.total_display }} due</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-shell">
+    <div class="container-xxl">
+        <div class="checkout-layout">
+            <form method="post" class="checkout-form reveal-up">
+                <div class="checkout-section">
+                    <span class="section-kicker">Contact</span>
+                    <h2>Delivery details</h2>
+                    <div class="field-grid">
+                        <div>
+                            <label class="form-label" for="full_name">Full name</label>
+                            <input class="form-control form-control-lg" id="full_name" name="full_name" value="{{ form_data.get('full_name', '') }}" required>
+                        </div>
+                        <div>
+                            <label class="form-label" for="email">Email</label>
+                            <input class="form-control form-control-lg" id="email" type="email" name="email" value="{{ form_data.get('email', '') }}" required>
+                        </div>
+                        <div>
+                            <label class="form-label" for="phone">Phone</label>
+                            <input class="form-control form-control-lg" id="phone" name="phone" value="{{ form_data.get('phone', '') }}" required>
+                        </div>
+                        <div>
+                            <label class="form-label" for="city">City</label>
+                            <input class="form-control form-control-lg" id="city" name="city" value="{{ form_data.get('city', '') }}" required>
+                        </div>
+                        <div class="field-grid__full">
+                            <label class="form-label" for="address">Address</label>
+                            <textarea class="form-control form-control-lg" id="address" name="address" rows="3" required>{{ form_data.get('address', '') }}</textarea>
+                        </div>
+                        <div>
+                            <label class="form-label" for="postal_code">Postal code</label>
+                            <input class="form-control form-control-lg" id="postal_code" name="postal_code" value="{{ form_data.get('postal_code', '') }}" required>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="checkout-section">
+                    <span class="section-kicker">Payment</span>
+                    <h2>Choose your payment method</h2>
+                    <div class="payment-options">
+                        {% for method in payment_methods %}
+                            <label class="payment-option">
+                                <input type="radio" name="payment_method" value="{{ method.id }}" {% if form_data.get('payment_method', 'cod') == method.id %}checked{% endif %}>
+                                <span class="payment-option__card">
+                                    <span class="payment-option__icon"><i class="bi {{ method.icon }}"></i></span>
+                                    <span>
+                                        <strong>{{ method.label }}</strong>
+                                        <small>{{ method.caption }}</small>
+                                    </span>
+                                </span>
+                            </label>
+                        {% endfor %}
+                    </div>
+
+                    <div class="payment-detail-panels">
+                        <div class="payment-detail" data-payment-detail="upi">
+                            <label class="form-label" for="upi_id">UPI ID / Wallet handle</label>
+                            <input class="form-control form-control-lg" id="upi_id" name="upi_id" value="{{ form_data.get('upi_id', '') }}" placeholder="example@upi">
+                        </div>
+
+                        <div class="payment-detail" data-payment-detail="card">
+                            <div class="field-grid">
+                                <div>
+                                    <label class="form-label" for="card_name">Card holder</label>
+                                    <input class="form-control form-control-lg" id="card_name" name="card_name" value="{{ form_data.get('card_name', '') }}" placeholder="Shadow Market User">
+                                </div>
+                                <div>
+                                    <label class="form-label" for="card_number">Card number</label>
+                                    <input class="form-control form-control-lg" id="card_number" name="card_number" value="{{ form_data.get('card_number', '') }}" placeholder="4242 4242 4242 4242">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="payment-detail" data-payment-detail="netbanking">
+                            <label class="form-label" for="bank_name">Select your bank</label>
+                            <select class="form-select form-select-lg" id="bank_name" name="bank_name">
+                                <option value="">Choose bank</option>
+                                {% for bank_name in ['State Bank of India', 'HDFC Bank', 'ICICI Bank', 'Axis Bank'] %}
+                                    <option value="{{ bank_name }}" {% if form_data.get('bank_name', '') == bank_name %}selected{% endif %}>{{ bank_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <p class="helper-note">
+                        We keep your checkout details protected with secure processing.
+                    </p>
+                </div>
+
+                <button class="btn btn-primary btn-lg w-100" type="submit">Place order</button>
+            </form>
+
+            <aside class="order-summary-card reveal-up">
+                <span class="section-kicker">Order summary</span>
+                <h2>Review before placing</h2>
+                <div class="checkout-items">
+                    {% for item in cart_items %}
+                        <div class="checkout-item">
+                            <img src="{{ item.image }}"
+                                 alt="{{ item.full_name }}"
+                                 loading="lazy"
+                                 decoding="async"
+                                 width="160"
+                                 height="160"
+                                 data-fallback-src="{{ item.image_fallback if item.image_fallback is defined else '' }}"
+                                 data-placeholder-src="{{ placeholder_image }}"
+                                 onerror="window.handleImageFallback(this);">
+                            <div>
+                                <strong>{{ item.name }}</strong>
+                                {% if item.variant_label %}
+                                    <small>{{ item.variant_label }}</small>
+                                {% endif %}
+                                <small>{{ item.quantity }} x {{ item.price_display }}</small>
+                            </div>
+                            <span>{{ item.subtotal_display }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="summary-list">
+                    <div class="summary-row">
+                        <span>Subtotal</span>
+                        <span>{{ cart_summary.subtotal_display }}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Shipping</span>
+                        <span>{{ cart_summary.shipping_display }}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Estimated tax</span>
+                        <span>{{ cart_summary.tax_display }}</span>
+                    </div>
+                    <div class="summary-row summary-row--highlight">
+                        <span>Total payable</span>
+                        <span>{{ cart_summary.total_display }}</span>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,104 @@
+{% macro render_stars(product) %}
+<div class="rating-row" aria-label="{{ product.rating }} out of 5 stars">
+    <div class="stars">
+        {% set full_stars = product.rating|int %}
+        {% set has_half_star = (product.rating - full_stars) >= 0.5 %}
+        {% for _ in range(full_stars) %}
+            <i class="bi bi-star-fill"></i>
+        {% endfor %}
+        {% if has_half_star %}
+            <i class="bi bi-star-half"></i>
+        {% endif %}
+        {% for _ in range(5 - full_stars - (1 if has_half_star else 0)) %}
+            <i class="bi bi-star"></i>
+        {% endfor %}
+    </div>
+    <span class="rating-score">{{ product.rating }}</span>
+    <span class="rating-count">{{ product.review_count }} reviews</span>
+</div>
+{% endmacro %}
+
+{% macro product_card(product, show_save=True) %}
+{% set target_product_id = product.primary_product_id if product.primary_product_id is defined else product.product_id %}
+<article class="product-card reveal-up">
+    <div class="product-media">
+        <a href="{{ url_for('product', product_id=target_product_id) }}" class="product-media__link">
+            <img src="{{ product.image }}"
+                 class="card-img-top"
+                 alt="{{ product.name }}"
+                 loading="lazy"
+                 decoding="async"
+                 width="520"
+                 height="520"
+                 data-fallback-src="{{ product.image_fallback if product.image_fallback is defined else '' }}"
+                 data-placeholder-src="{{ placeholder_image }}"
+                 onerror="window.handleImageFallback(this);">
+        </a>
+        <div class="product-badges">
+            <span class="product-badge">{{ product.badge }}</span>
+            <span class="product-badge product-badge--accent">{{ product.discount_percent }}% off</span>
+        </div>
+    </div>
+    <div class="product-body">
+        <div class="product-meta">
+            <span class="product-category">{{ product.category }}</span>
+            <span class="product-brand">{{ product.brand }}</span>
+            {% if product.subcategory %}
+                <span class="product-subcategory">{{ product.subcategory }}</span>
+            {% endif %}
+        </div>
+        <a href="{{ url_for('product', product_id=target_product_id) }}" class="product-title-link">
+            <h3 class="card-title">{{ product.name }}</h3>
+        </a>
+        <p class="card-text">{{ product.short_description }}</p>
+
+        {% if product.variant_count > 1 %}
+            <div class="variant-summary">
+                <span class="variant-summary__count">{{ product.variant_count }} options</span>
+                <div class="variant-summary__pills">
+                    {% for label in product.variant_preview %}
+                        <span class="variant-pill">{{ label }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+
+        {{ render_stars(product) }}
+
+        <div class="product-price-row">
+            {% if product.price_caption %}
+                <span class="product-price-prefix">{{ product.price_caption }}</span>
+            {% endif %}
+            <span class="product-price">{{ product.price_display }}</span>
+            <span class="product-price product-price--old">{{ product.original_price_display }}</span>
+        </div>
+
+        <div class="product-utility">
+            <span>{{ product.delivery_text }}</span>
+            <span>{{ product.stock_text }}</span>
+        </div>
+
+        <div class="product-actions product-actions--catalog">
+            <a href="{{ url_for('product', product_id=target_product_id) }}" class="btn btn-dark">
+                {{ product.card_action_label if product.card_action_label is defined else 'See details' }}
+            </a>
+            <form action="{{ url_for('add_to_cart', product_id=target_product_id) }}" method="post" class="product-actions__form">
+                <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
+                <button class="btn btn-outline-secondary" type="submit">
+                    {% if product.variant_count > 1 %}Add default{% else %}Add to cart{% endif %}
+                </button>
+            </form>
+            {% if show_save and current_user.is_authenticated %}
+                <button type="button"
+                        class="btn btn-outline-primary product-save-btn"
+                        data-interact-product-id="{{ target_product_id }}"
+                        aria-label="Save {{ product.name }}"
+                        title="Save {{ product.name }}">
+                    <i class="bi bi-heart"></i>
+                    <span class="visually-hidden">Save {{ product.name }}</span>
+                </button>
+            {% endif %}
+        </div>
+    </div>
+</article>
+{% endmacro %}

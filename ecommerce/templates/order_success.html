@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% from "_product_macros.html" import product_card with context %}
+
+{% block title %}Order Confirmed | {{ site_name }}{% endblock %}
+{% block body_class %}success-page{% endblock %}
+
+{% block content %}
+<section class="section-shell">
+    <div class="container-xxl">
+        <div class="success-card reveal-up">
+            <span class="success-badge"><i class="bi bi-check2-circle"></i> Order confirmed</span>
+            <h1>Your ShadowMarket order is in.</h1>
+            <p>
+                Thanks {{ order.customer.full_name }}. Your order has been placed successfully,
+                including variant-aware cart items, payment selection, and confirmation details.
+            </p>
+
+            <div class="success-meta-grid">
+                <article class="detail-meta-card">
+                    <span class="detail-meta-card__label">Order ID</span>
+                    <strong>{{ order.id }}</strong>
+                </article>
+                <article class="detail-meta-card">
+                    <span class="detail-meta-card__label">Placed at</span>
+                    <strong>{{ order.placed_at }}</strong>
+                </article>
+                <article class="detail-meta-card">
+                    <span class="detail-meta-card__label">Payment</span>
+                    <strong>{{ order.payment_method }}</strong>
+                </article>
+                <article class="detail-meta-card">
+                    <span class="detail-meta-card__label">Delivery ETA</span>
+                    <strong>{{ order.eta }}</strong>
+                </article>
+            </div>
+
+            <div class="success-summary">
+                <div>
+                    <h2>Shipping to</h2>
+                    <p>{{ order.customer.address }}, {{ order.customer.city }} - {{ order.customer.postal_code }}</p>
+                    <p>{{ order.customer.email }} | {{ order.customer.phone }}</p>
+                </div>
+                <div>
+                    <h2>Order total</h2>
+                    <p class="success-summary__total">{{ order.summary.total_display }}</p>
+                    <p>{{ order.payment_status }}</p>
+                </div>
+            </div>
+
+            <div class="success-order-items">
+                {% for item in order['items'] %}
+                    <div class="success-order-item">
+                        <div>
+                            <strong>{{ item.name }}</strong>
+                            {% if item.variant_label %}
+                                <small>{{ item.variant_label }}</small>
+                            {% endif %}
+                        </div>
+                        <span>{{ item.quantity }} x {{ item.price_display }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+
+            <div class="success-actions">
+                <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg">Continue shopping</a>
+                <a href="{{ url_for('search') }}" class="btn btn-outline-secondary btn-lg">Browse full catalog</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-shell section-shell--tinted">
+    <div class="container-xxl">
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">Keep discovering</span>
+                <h2 class="section-title">More product families you may like</h2>
+            </div>
+        </div>
+        <div class="product-strip">
+            {% for product in recommended_products %}
+                {{ product_card(product) }}
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endblock %}

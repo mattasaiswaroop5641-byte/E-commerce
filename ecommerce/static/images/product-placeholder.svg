@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" role="img" aria-labelledby="title desc">
+  <title id="title">ShadowMarket product artwork</title>
+  <desc id="desc">Store-themed product artwork used when an online catalog image is unavailable.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff5eb"/>
+      <stop offset="55%" stop-color="#fde4cf"/>
+      <stop offset="100%" stop-color="#f8d4b2"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#172033"/>
+      <stop offset="100%" stop-color="#0b1220"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="600" rx="48" fill="url(#bg)"/>
+  <g opacity="0.24" fill="#f97316">
+    <circle cx="108" cy="112" r="72"/>
+    <circle cx="522" cy="86" r="40"/>
+    <circle cx="520" cy="492" r="92"/>
+  </g>
+  <rect x="120" y="124" width="360" height="352" rx="34" fill="url(#card)"/>
+  <rect x="170" y="178" width="260" height="192" rx="28" fill="#1f2b45" stroke="#30415f" stroke-width="6"/>
+  <path d="M222 256c0-16 13-29 29-29h98c16 0 29 13 29 29v68c0 16-13 29-29 29h-98c-16 0-29-13-29-29z" fill="#213055"/>
+  <path d="M252 248c0-26 21-47 48-47s48 21 48 47" fill="none" stroke="#f8d4b2" stroke-width="14" stroke-linecap="round"/>
+  <rect x="206" y="396" width="188" height="18" rx="9" fill="#314567"/>
+  <rect x="236" y="432" width="128" height="18" rx="9" fill="#314567"/>
+  <text x="300" y="534" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700" fill="#172033">Curated Collection</text>
+</svg>

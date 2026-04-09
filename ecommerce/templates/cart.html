@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% from "_product_macros.html" import product_card with context %}
+
+{% block title %}Your Cart | {{ site_name }}{% endblock %}
+{% block body_class %}cart-page{% endblock %}
+
+{% block content %}
+<section class="page-hero">
+    <div class="container-xxl">
+        <div class="page-hero__shell reveal-up">
+            <div class="page-hero__copy">
+                <span class="section-kicker">Cart review</span>
+                <h1>Your ShadowMarket bag</h1>
+                <p>Review exact variants, adjust quantity, and continue to secure checkout when you are ready.</p>
+            </div>
+            <div class="page-hero__meta">
+                <span class="page-meta-pill">{{ cart_summary.item_count }} items</span>
+                <span class="page-meta-pill">{{ cart_summary.total_display }} total</span>
+                <a href="{{ url_for('checkout') }}" class="page-meta-link">Checkout now <i class="bi bi-arrow-right"></i></a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-shell">
+    <div class="container-xxl">
+        {% if cart_items %}
+            <div class="cart-layout">
+                <div class="cart-list">
+                    {% for item in cart_items %}
+                        <article class="cart-item-card reveal-up">
+                            <div class="cart-item-card__media">
+                                <img src="{{ item.image }}"
+                                     alt="{{ item.full_name }}"
+                                     loading="lazy"
+                                     decoding="async"
+                                     width="420"
+                                     height="420"
+                                     data-fallback-src="{{ item.image_fallback if item.image_fallback is defined else '' }}"
+                                     data-placeholder-src="{{ placeholder_image }}"
+                                     onerror="window.handleImageFallback(this);">
+                            </div>
+                            <div class="cart-item-card__content">
+                                <div class="cart-item-card__meta">
+                                    <span class="section-kicker">{{ item.category }}</span>
+                                    <h2>{{ item.name }}</h2>
+                                    {% if item.variant_label %}
+                                        <p class="cart-item-card__variant">{{ item.variant_label }}</p>
+                                    {% endif %}
+                                    <p>{{ item.short_description }}</p>
+                                </div>
+                                <div class="cart-item-card__details">
+                                    <span>{{ item.price_display }} each</span>
+                                    <span>{{ item.delivery_text }}</span>
+                                    <span>{{ item.stock_text }}</span>
+                                </div>
+                                <div class="cart-item-card__footer">
+                                    <form action="{{ url_for('update_cart_item', product_id=item.product_id) }}" method="post" class="quantity-form">
+                                        <label for="qty-{{ item.product_id }}">Qty</label>
+                                        <input id="qty-{{ item.product_id }}" type="number" min="1" max="6" name="quantity" value="{{ item.quantity }}">
+                                        <button class="btn btn-outline-secondary" type="submit">Update</button>
+                                    </form>
+                                    <div class="cart-item-card__actions">
+                                        <strong>{{ item.subtotal_display }}</strong>
+                                        <form action="{{ url_for('remove_from_cart', product_id=item.product_id) }}" method="post">
+                                            <button class="btn btn-link" type="submit">Remove</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+                    {% endfor %}
+                </div>
+
+                <aside class="order-summary-card reveal-up">
+                    <span class="section-kicker">Order summary</span>
+                    <h2>Ready for checkout</h2>
+                    <div class="summary-list">
+                        <div class="summary-row">
+                            <span>Subtotal</span>
+                            <span>{{ cart_summary.subtotal_display }}</span>
+                        </div>
+                        <div class="summary-row">
+                            <span>Shipping</span>
+                            <span>{{ cart_summary.shipping_display }}</span>
+                        </div>
+                        <div class="summary-row">
+                            <span>Estimated tax</span>
+                            <span>{{ cart_summary.tax_display }}</span>
+                        </div>
+                        <div class="summary-row summary-row--highlight">
+                            <span>Total</span>
+                            <span>{{ cart_summary.total_display }}</span>
+                        </div>
+                    </div>
+                    <p class="helper-note">
+                        {% if cart_summary.free_shipping_gap > 0 %}
+                            Add {{ cart_summary.free_shipping_gap_display }} more to unlock free shipping.
+                        {% else %}
+                            You have unlocked free shipping.
+                        {% endif %}
+                    </p>
+                    <a href="{{ url_for('checkout') }}" class="btn btn-primary btn-lg w-100">Continue to checkout</a>
+                    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary w-100">Keep shopping</a>
+                </aside>
+            </div>
+        {% else %}
+            <div class="empty-state reveal-up">
+                <div class="empty-state__icon">
+                    <i class="bi bi-bag-x"></i>
+                </div>
+                <h2>Your cart is empty</h2>
+                <p>Add products from the catalog and start shopping.</p>
+                <a href="{{ url_for('index') }}#catalog" class="btn btn-primary">Start shopping</a>
+            </div>
+        {% endif %}
+    </div>
+</section>
+
+{% if recommended_products %}
+    <section class="section-shell section-shell--tinted">
+        <div class="container-xxl">
+            <div class="section-heading">
+                <div>
+                    <span class="section-kicker">Complete your bag</span>
+                    <h2 class="section-title">You might want these too</h2>
+                </div>
+            </div>
+            <div class="product-strip">
+                {% for product in recommended_products %}
+                    {{ product_card(product) }}
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,15 @@
+{
+    "venvPath": "ecommerce",
+    "venv": "venv",
+    "typeCheckingMode": "basic",
+    "reportMissingImports": "none",
+    "reportMissingModuleSource": "none",
+    "executionEnvironments": [
+        {
+            "root": "ecommerce",
+            "extraPaths": [
+                "ecommerce"
+            ]
+        }
+    ]
+}
