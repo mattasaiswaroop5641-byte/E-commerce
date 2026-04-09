@@ -1,5 +1,5 @@
-theme: jekyll-theme-minimal
 title: ShadowMarket - E-Commerce Platform
 description: Flask e-commerce with AI recommendations
-logo: 
-show_downloads: true
+author: mattasaiswaroop5641-byte
+markdown: kramdown
+permalink: /:title/
