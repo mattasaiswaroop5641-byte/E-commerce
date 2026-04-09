@@ -485,8 +485,8 @@ def init_recommenders(force_reload: bool = False) -> None:
 
     interactions_path = os.path.join(os.path.dirname(__file__), "data", "interactions.csv")
     if os.path.exists(interactions_path):
-        collab_recommender = CollabRecommender(n_components=15)
-        collab_recommender.fit()
+        collab_recommender = CollabRecommender(n_components=10)
+        # Lazy load collab model - don't train on startup to prevent timeout
     else:
         collab_recommender = None
 
@@ -944,9 +944,13 @@ def index():
         )
 
     if current_user.is_authenticated and collab_recommender is not None: # type: ignore
-        recommended_source.extend(
-            collab_recommender.recommend_for_user(current_user.id, top_n=RECOMMENDATION_POOL_SIZE) # type: ignore
-        )
+        # Lazy load collab model on first request
+        if collab_recommender.model is None:
+            collab_recommender.fit()
+        if collab_recommender.model is not None:
+            recommended_source.extend(
+                collab_recommender.recommend_for_user(current_user.id, top_n=RECOMMENDATION_POOL_SIZE) # type: ignore
+            )
         if current_user.interactions and cb_recommender is not None: # type: ignore
             user_interactions = pd.DataFrame(
                 [

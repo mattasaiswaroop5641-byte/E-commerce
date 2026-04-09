@@ -112,7 +112,7 @@ class CollabRecommender:
                 n_components=max_components,
                 init="nndsvda",
                 random_state=self.random_state,
-                max_iter=600,
+                max_iter=200,
             )
             user_matrix = nmf.fit_transform(matrix)
             item_matrix = nmf.components_
