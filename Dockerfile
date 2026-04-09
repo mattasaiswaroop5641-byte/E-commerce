@@ -2,8 +2,8 @@ FROM python:3.11-slim-bookworm
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Update base system packages to patch vulnerabilities
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
