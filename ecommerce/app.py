@@ -612,7 +612,7 @@ def build_pagination(items: list[dict[str, Any]], page: int, per_page: int = RES
             params.pop("page", None)
         else:
             params["page"] = str(target_page)
-        return url_for(request.endpoint or "search", **(request.view_args or {}), **params)
+        return url_for(request.endpoint or "search", **(request.view_args or {}), **params)  # type: ignore
 
     page_numbers = list(range(max(1, current_page - 2), min(total_pages, current_page + 2) + 1))
 
@@ -898,8 +898,8 @@ def record_order_interactions(cart_items: list[dict[str, Any]]) -> None:
             db.session.add(
                 Interaction(
                     user_id=current_user.id, # type: ignore
-                    product_id=item["product_id"],
-                    quantity=item["quantity"],
+                    product_id=item["product_id"],  # type: ignore
+                    quantity=item["quantity"],  # type: ignore
                 )
             )
     db.session.commit() # type: ignore
@@ -1066,8 +1066,8 @@ def signup():
             flash("That email address is already registered.", "warning")
             return redirect(url_for("signup"))
 
-        user = User(username=form.username.data, email=form.email.data)
-        user.set_password(form.password.data)
+        user = User(username=form.username.data, email=form.email.data)  # type: ignore
+        user.set_password(form.password.data or "")  # type: ignore
         db.session.add(user) # type: ignore
         db.session.commit() # type: ignore
         flash("Account created successfully. Please sign in.", "success")
@@ -1248,8 +1248,8 @@ def checkout():
 
     cart_summary = get_cart_summary(cart_items)
     form_data: dict[str, Any] = {
-        "full_name": current_user.username if current_user.is_authenticated else "", # type: ignore
-        "email": current_user.email if current_user.is_authenticated else "", # type: ignore
+        "full_name": getattr(current_user, "username", "") if current_user.is_authenticated else "",  # type: ignore
+        "email": getattr(current_user, "email", "") if current_user.is_authenticated else "",  # type: ignore
         "phone": "",
         "address": "",
         "city": "",
