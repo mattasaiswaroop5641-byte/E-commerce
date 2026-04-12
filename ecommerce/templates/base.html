@@ -168,9 +168,9 @@
                 <div>
                     <h3 class="footer-title">Categories</h3>
                     <ul class="footer-links">
-                        {% for category in categories[:6] %}
+                        <!-- {% for category in categories[:6] %} -->
                         <li><a href="{{ url_for('category_products', category_slug=category.slug) }}">{{ category.name }}</a></li>
-                        {% endfor %}
+                        <!-- {% endfor %} -->
                     </ul>
                 </div>
                 <div>

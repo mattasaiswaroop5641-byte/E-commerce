@@ -1419,11 +1419,34 @@ def create_products():
             )
         seen_thumb_urls.add(family_row["images"]["thumb"])
 
+    # Load fix.txt mappings to apply them directly into the dataset
+    fix_path = os.path.join(DATA_DIR, "..", "..", "fix.txt")
+    fix_mappings = {}
+    if os.path.exists(fix_path):
+        with open(fix_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or ":" not in line:
+                    continue
+                name, url = line.split(":", 1)
+                normalized_name = re.sub(r"\s+", " ", name.strip().lower())
+                fix_mappings[normalized_name] = url.strip()
+
     rows = []
     product_id = 1
 
     for family_row in families:
         for variant in family_row["variants"]:
+            base_name = family_row["name"]
+            variant_label = variant["label"]
+            full_name = f"{base_name} - {variant_label}" if variant_label else base_name
+            
+            normalized_base = re.sub(r"\s+", " ", base_name.strip().lower())
+            normalized_full = re.sub(r"\s+", " ", full_name.strip().lower())
+            
+            thumb_url = fix_mappings.get(normalized_full) or fix_mappings.get(normalized_base) or family_row["images"]["thumb"]
+            hero_url = fix_mappings.get(normalized_full) or fix_mappings.get(normalized_base) or family_row["images"]["hero"]
+
             row = {
                 "product_id": product_id,
                 "product_family_id": family_row["family_id"],
@@ -1437,9 +1460,9 @@ def create_products():
                 "variant_value": variant["value"],
                 "variant_label": variant["label"],
                 "is_default": "true" if variant.get("default") else "false",
-                "thumb_image_url": family_row["images"]["thumb"],
-                "hero_image_url": family_row["images"]["hero"],
-                "image_url": family_row["images"]["thumb"],
+                "thumb_image_url": thumb_url,
+                "hero_image_url": hero_url,
+                "image_url": thumb_url,
             }
             rows.append(row)
             product_id += 1

@@ -44,6 +44,49 @@ CATEGORY_FALLBACK_PHOTO_IDS = {
     "Toys & Games": "photo-1611987867914-5c7947a0b1a3",
 }
 
+# Optional runtime overrides loaded from a fix file (name -> image URL or data URI).
+FIX_IMAGE_MAP: dict[str, str] = {}
+
+
+def normalize_mapping_key(value: Any) -> str:
+    """Normalize product name keys for matching against fix mappings."""
+    return re.sub(r"\s+", " ", str(value or "").strip().lower())
+
+
+def load_fix_mappings(path: Optional[str] = None) -> None:
+    """Load name->image mappings from a `fix.txt` file next to the repo root.
+
+    File format (one mapping per line):
+        Product Name:IMAGE_URL_OR_DATA_URI
+
+    Loading is best-effort and silent if the file is not present.
+    """
+    global FIX_IMAGE_MAP
+    if path is None:
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "fix.txt")
+    path = os.path.normpath(path)
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            for raw in fh:
+                line = raw.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if ":" not in line:
+                    continue
+                name, url = line.split(":", 1)
+                name = name.strip()
+                url = url.strip()
+                if not name or not url:
+                    continue
+                FIX_IMAGE_MAP[normalize_mapping_key(name)] = url
+        app.logger.info("Loaded %d fix image mappings from %s", len(FIX_IMAGE_MAP), path)
+    except Exception:
+        app.logger.exception("Failed to read fix mappings from %s", path)
+
+
 CATEGORY_META = {
     "Mobiles": {
         "icon": "bi-phone",
@@ -226,6 +269,14 @@ def enrich_product(product_like: Any, ensure_loaded: bool = True) -> dict[str, A
     price = round(float(data.get("price", 0.0) or 0.0), 2)
     thumb_image = data.get("thumb_image_url") or data.get("image_url") or PLACEHOLDER_IMAGE_PATH
     hero_image = data.get("hero_image_url") or thumb_image or PLACEHOLDER_IMAGE_PATH
+    # If a fix mapping exists for this product name, override the images at render-time.
+    full_name_candidate = f"{base_name} - {variant_label}" if variant_label else base_name
+    mapped_url = None
+    if FIX_IMAGE_MAP:
+        mapped_url = FIX_IMAGE_MAP.get(normalize_mapping_key(full_name_candidate)) or FIX_IMAGE_MAP.get(normalize_mapping_key(base_name))
+    if mapped_url:
+        thumb_image = mapped_url
+        hero_image = mapped_url
     thumb_fallback_image = build_online_image_url(
         family_id,
         base_name,
@@ -465,6 +516,9 @@ def init_recommenders(force_reload: bool = False) -> None:
     image_mask = products_df["image_url"] == ""
     products_df.loc[image_mask, "image_url"] = products_df.loc[image_mask, "thumb_image_url"]
     products_df = products_df.sort_values(["product_id"]).reset_index(drop=True)
+
+    # Load any runtime name->image overrides before building family cards.
+    load_fix_mappings()
 
     family_rows_by_id = {}
     family_cards_by_id = {}
