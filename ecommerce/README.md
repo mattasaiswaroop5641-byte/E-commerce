@@ -7,6 +7,7 @@ A Flask ecommerce showcase with a richer catalog, grouped variants, cart and che
 - Variant-aware catalog with grouped family cards
 - Search, category browsing, product detail, cart, checkout, and order confirmation
 - Login and signup with SQLite
+- Email notifications for account signup, successful login, and order confirmation
 - Content-based recommendations
 - Collaborative filtering recommendations
 - Larger generated dataset with online product imagery and demo interactions
@@ -33,8 +34,25 @@ A Flask ecommerce showcase with a richer catalog, grouped variants, cart and che
 ```bash
 cd ecommerce
 pip install -r requirements.txt
+copy ..\\.env.example .env
 python app.py
 ```
+
+### Email Setup (for signup/login/order emails)
+
+Set these values in `.env`:
+
+```bash
+MAIL_SERVER=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=your-email@gmail.com
+MAIL_PASSWORD=your-app-password
+MAIL_FROM_NAME=ShadowMarket
+MAIL_FROM_ADDRESS=your-email@gmail.com
+MAIL_SEND_LOGIN_NOTIFICATIONS=true
+```
+
+For Gmail, use an App Password (not your regular account password).
 
 ### Docker Deployment
 

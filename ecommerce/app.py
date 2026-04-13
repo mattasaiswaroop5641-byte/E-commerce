@@ -1,17 +1,23 @@
 import os
 import re
+import smtplib
+import threading
+from email.message import EmailMessage
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from typing import Any, Optional
 
-import pandas as pd # type: ignore
+import pandas as pd
+from dotenv import load_dotenv
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
-from flask_login import LoginManager, current_user, login_required, login_user, logout_user # type: ignore
+from flask_login import LoginManager, current_user, login_required, login_user, logout_user
 
 from forms import LoginForm, SignupForm
-from models import Interaction, User, db # type: ignore
+from models import Interaction, User, db
 from recommenders.collab import CollabRecommender
 from recommenders.content_based import ContentRecommender
+
+load_dotenv()
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "your-secret-key-here-change-in-production")
@@ -21,6 +27,15 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app) # type: ignore
 login_manager = LoginManager(app) # type: ignore
 login_manager.login_view = "login" # type: ignore
+
+_db_initialized = False
+
+@app.before_request
+def initialize_database():
+    global _db_initialized
+    if not _db_initialized:
+        db.create_all() # type: ignore
+        _db_initialized = True
 
 SITE_NAME = "ShadowMarket"
 PLACEHOLDER_IMAGE_PATH = "/static/images/product-placeholder.svg"
@@ -910,10 +925,15 @@ def build_order_payload(cart_items: list[dict[str, Any]], summary: dict[str, Any
     eta = (datetime.now(timezone.utc) + timedelta(days=4)).strftime("%A, %d %b")
     payment_status = "Pay on delivery" if payment_method["id"] == "cod" else "Demo payment confirmed"
 
+    tracking_number = f"TRK-{uuid4().hex[:10].upper()}"
+    tracking_url = url_for('track_order', tracking_number=tracking_number, _external=True)
+
     return {
         "id": f"SM-{uuid4().hex[:8].upper()}",
         "placed_at": datetime.now(timezone.utc).strftime("%d %b %Y, %I:%M %p"),
         "eta": eta,
+        "tracking_number": tracking_number,
+        "tracking_url": tracking_url,
         "customer": {
             "full_name": form_data["full_name"],
             "email": form_data["email"],
@@ -936,6 +956,168 @@ def save_order(order_payload: dict[str, Any]) -> None:
     session["orders"] = orders[:5]
     session["last_order"] = order_payload
     session.modified = True
+
+
+def get_mail_config() -> dict[str, Any]:
+    return {
+        "server": os.environ.get("MAIL_SERVER", "smtp.gmail.com"),
+        "port": int(os.environ.get("MAIL_PORT", "587")),
+        "username": os.environ.get("MAIL_USERNAME"),
+        "password": os.environ.get("MAIL_PASSWORD"),
+        "from_name": os.environ.get("MAIL_FROM_NAME", SITE_NAME),
+        "from_address": os.environ.get("MAIL_FROM_ADDRESS"),
+    }
+
+
+def send_html_email_async(subject: str, recipient_email: str, text_content: str, html_content: str) -> None:
+    mail = get_mail_config()
+    smtp_user = mail["username"]
+    smtp_pass = mail["password"]
+    recipient = str(recipient_email or "").strip()
+
+    if not recipient:
+        return
+
+    if not smtp_user or not smtp_pass:
+        app.logger.warning("Mail credentials (MAIL_USERNAME, MAIL_PASSWORD) are not set. Skipping email.")
+        return
+
+    from_address = mail["from_address"] or smtp_user
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = f"{mail['from_name']} <{from_address}>"
+    msg["To"] = recipient
+    msg.set_content(text_content)
+    msg.add_alternative(html_content, subtype="html")
+
+    try:
+        with smtplib.SMTP(mail["server"], mail["port"]) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+        app.logger.info("Email sent: %s -> %s", subject, recipient)
+    except Exception as exc:
+        app.logger.error("Failed to send email '%s' to %s: %s", subject, recipient, exc)
+
+
+def send_order_email_async(order_payload: dict[str, Any], recipient_email: str) -> None:
+    items_html = "".join(
+        [
+            f"<li>{item['quantity']}x {item['full_name']} - {item['price_display']}</li>"
+            for item in order_payload["items"]
+        ]
+    )
+
+    send_html_email_async(
+        subject=f"Your ShadowMarket Order {order_payload['id']} is Confirmed",
+        recipient_email=recipient_email,
+        text_content="Your ShadowMarket order is confirmed. Please open this email in HTML view for full details.",
+        html_content=f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; color: #333;">
+            <h2>Thank you for your order, {order_payload['customer']['full_name']}!</h2>
+            <p>We have received your order <strong>{order_payload['id']}</strong> and it is being processed.</p>
+
+            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <h3 style="margin-top: 0;">Tracking Information</h3>
+                <p>Your tracking number is: <strong>{order_payload['tracking_number']}</strong></p>
+                <p>
+                    Track your package here:
+                    <a href="{order_payload['tracking_url']}" style="color: #0066cc;">Track Order</a>
+                </p>
+                <p>Estimated delivery: <strong>{order_payload['eta']}</strong></p>
+            </div>
+
+            <h3>Order Summary</h3>
+            <ul>{items_html}</ul>
+            <p><strong>Total: {order_payload['summary']['total_display']}</strong></p>
+            <p>Thanks for shopping at ShadowMarket.</p>
+        </body>
+        </html>
+        """,
+    )
+
+
+def send_order_email(order_payload: dict[str, Any], recipient_email: str) -> None:
+    if recipient_email:
+        thread = threading.Thread(target=send_order_email_async, args=(order_payload, recipient_email), daemon=True)
+        thread.start()
+
+
+def send_welcome_email_async(recipient_email: str, username: str, shop_url: str) -> None:
+    send_html_email_async(
+        subject="Welcome to ShadowMarket",
+        recipient_email=recipient_email,
+        text_content="Welcome to ShadowMarket. Sign in and start shopping now.",
+        html_content=f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+                <h2 style="color: #000;">Welcome to ShadowMarket, {username}!</h2>
+                <p>We are thrilled to have you on board.</p>
+                <p>
+                    Start exploring our catalog for the best deals on electronics, fashion, and more.
+                    We update our stock regularly with fresh drops and top deals.
+                </p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{shop_url}" style="display: inline-block; padding: 12px 24px; background-color: #000; color: #fff; text-decoration: none; border-radius: 5px; font-weight: bold;">Start Shopping</a>
+                </div>
+                <p>Thanks,<br><strong>The ShadowMarket Team</strong></p>
+            </div>
+        </body>
+        </html>
+        """,
+    )
+
+
+def send_welcome_email(recipient_email: str, username: str) -> None:
+    if recipient_email:
+        shop_url = url_for("index", _external=True)
+        thread = threading.Thread(target=send_welcome_email_async, args=(recipient_email, username, shop_url), daemon=True)
+        thread.start()
+
+
+def send_login_email_async(recipient_email: str, username: str, login_time: str, shop_url: str) -> None:
+    send_html_email_async(
+        subject="ShadowMarket login notification",
+        recipient_email=recipient_email,
+        text_content=f"Hello {username}, your ShadowMarket account just logged in at {login_time} UTC.",
+        html_content=f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+                <h2 style="color: #000; margin-bottom: 12px;">New login detected</h2>
+                <p>Hello {username}, we noticed a successful login to your ShadowMarket account.</p>
+                <p><strong>Time (UTC):</strong> {login_time}</p>
+                <p>If this was you, no action is needed. If not, change your password immediately.</p>
+                <div style="text-align: center; margin: 26px 0;">
+                    <a href="{shop_url}" style="display: inline-block; padding: 12px 24px; background-color: #000; color: #fff; text-decoration: none; border-radius: 5px; font-weight: bold;">Open ShadowMarket</a>
+                </div>
+                <p>Stay safe,<br><strong>The ShadowMarket Team</strong></p>
+            </div>
+        </body>
+        </html>
+        """,
+    )
+
+
+def send_login_email(recipient_email: str, username: str) -> None:
+    if not recipient_email:
+        return
+
+    send_login_notifications = coerce_bool(os.environ.get("MAIL_SEND_LOGIN_NOTIFICATIONS", "true"))
+    if not send_login_notifications:
+        return
+
+    login_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    shop_url = url_for("index", _external=True)
+    thread = threading.Thread(
+        target=send_login_email_async,
+        args=(recipient_email, username, login_time, shop_url),
+        daemon=True,
+    )
+    thread.start()
 
 
 def record_order_interactions(cart_items: list[dict[str, Any]]) -> None:
@@ -1100,6 +1282,7 @@ def login():
         user: Any = User.query.filter_by(username=form.username.data).first() # type: ignore
         if user and user.check_password(form.password.data):
             login_user(user) # type: ignore
+            send_login_email(user.email, user.username) # type: ignore
             flash("Welcome back to ShadowMarket.", "success")
             return redirect(url_for("index"))
         flash("Invalid username or password.", "warning")
@@ -1128,6 +1311,10 @@ def signup():
         user.set_password(form.password.data or "")  # type: ignore
         db.session.add(user) # type: ignore
         db.session.commit() # type: ignore
+
+        # Send a welcome email in the background
+        send_welcome_email(user.email, user.username) # type: ignore
+
         flash("Account created successfully. Please sign in.", "success")
         return redirect(url_for("login"))
 
@@ -1348,6 +1535,10 @@ def checkout():
             record_order_interactions(cart_items)
             save_order(order_payload)
             save_cart_map({})
+            
+            # Send confirmation email with tracking
+            send_order_email(order_payload, form_data["email"])
+            
             flash("Order placed successfully.", "success")
             return redirect(url_for("order_success", order_id=order_payload["id"]))
 
@@ -1381,6 +1572,12 @@ def order_success(order_id: str):
         order=order_payload,
         recommended_products=recommended_products,
     )
+
+
+@app.route("/track/<tracking_number>")
+def track_order(tracking_number: str):
+    flash(f"Tracking information for {tracking_number}: Your package is in transit and on schedule!", "info")
+    return redirect(url_for("index"))
 
 
 @app.route("/interact", methods=["POST"])
@@ -1435,3 +1632,4 @@ if __name__ == "__main__":
         init_recommenders(force_reload=True)
 
     app.run(debug=True)
+
