@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Track Order | {{ site_name }}{% endblock %}
+{% block body_class %}track-page{% endblock %}
+
+{% block content %}
+<section class="page-hero">
+    <div class="container-xxl">
+        <div class="page-hero__shell reveal-up">
+            <div class="page-hero__copy">
+                <span class="section-kicker">Live order tracking</span>
+                <h1>Track your ShadowMarket order</h1>
+                <p>Enter your tracking number to view the latest delivery status and timeline.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-shell">
+    <div class="container-xxl">
+        <div class="checkout-layout">
+            <form method="post" class="checkout-form reveal-up">
+                <div class="checkout-section">
+                    <span class="section-kicker">Tracking lookup</span>
+                    <h2>Find your package</h2>
+                    <div class="field-grid">
+                        <div class="field-grid__full">
+                            <label class="form-label" for="tracking_number">Tracking number</label>
+                            <input class="form-control form-control-lg" id="tracking_number" name="tracking_number" value="{{ entered_tracking_number }}" placeholder="TRK-XXXXXXXXXX" required>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-lg mt-3" type="submit">Track now</button>
+                </div>
+            </form>
+
+            <aside class="order-summary-card reveal-up">
+                <span class="section-kicker">Support</span>
+                <h2>Need help with delivery?</h2>
+                <p class="helper-note mb-3">Our team can help with delayed shipments, address updates, or order concerns.</p>
+                <a class="btn btn-outline-secondary w-100" href="{{ url_for('support', tracking_number=entered_tracking_number) }}">Contact customer support</a>
+            </aside>
+        </div>
+
+        {% if order %}
+            <div class="success-card reveal-up mt-4">
+                <span class="success-badge"><i class="bi bi-truck"></i> Tracking active</span>
+                <h2>{{ order.tracking_number }}</h2>
+                <div class="success-meta-grid">
+                    <article class="detail-meta-card">
+                        <span class="detail-meta-card__label">Order ID</span>
+                        <strong>{{ order.id }}</strong>
+                    </article>
+                    <article class="detail-meta-card">
+                        <span class="detail-meta-card__label">Current status</span>
+                        <strong>{{ order.get('order_status', 'processing').replace('_', ' ')|title }}</strong>
+                    </article>
+                    <article class="detail-meta-card">
+                        <span class="detail-meta-card__label">Payment status</span>
+                        <strong>{{ order.payment_status }}</strong>
+                    </article>
+                    <article class="detail-meta-card">
+                        <span class="detail-meta-card__label">ETA</span>
+                        <strong>{{ order.eta }}</strong>
+                    </article>
+                </div>
+
+                <div class="order-tracking-section">
+                    <h2>Shipment timeline</h2>
+                    <div class="tracking-timeline">
+                        {% for step in tracking_timeline %}
+                            <div class="tracking-step tracking-step--{{ step.state }}">
+                                <div class="tracking-step__marker">
+                                    <i class="bi {{ step.icon }}"></i>
+                                </div>
+                                <div class="tracking-step__content">
+                                    <strong>{{ step.title }}</strong>
+                                    <p>{{ step.detail }}</p>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="success-summary mt-4">
+                    <div>
+                        <h2>Shipping destination</h2>
+                        <p>{{ order.customer.address }}, {{ order.customer.city }} - {{ order.customer.postal_code }}</p>
+                    </div>
+                    <div>
+                        <h2>Need an update?</h2>
+                        <a href="{{ url_for('support', order_id=order.id, tracking_number=order.tracking_number) }}" class="btn btn-outline-primary">Raise support ticket</a>
+                    </div>
+                </div>
+            </div>
+        {% elif recent_orders %}
+            <div class="section-heading mt-4">
+                <div>
+                    <span class="section-kicker">Recent orders</span>
+                    <h2 class="section-title">Quick track from your account</h2>
+                </div>
+            </div>
+            <div class="success-order-items">
+                {% for recent in recent_orders %}
+                    <div class="success-order-item">
+                        <div>
+                            <strong>{{ recent.id }}</strong>
+                            <small>{{ recent.tracking_number }}</small>
+                        </div>
+                        <a href="{{ url_for('track_order', tracking_number=recent.tracking_number) }}" class="btn btn-outline-primary btn-sm">Track</a>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

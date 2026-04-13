@@ -83,15 +83,14 @@
                         </div>
 
                         <div class="payment-detail" data-payment-detail="card">
-                            <div class="field-grid">
-                                <div>
-                                    <label class="form-label" for="card_name">Card holder</label>
-                                    <input class="form-control form-control-lg" id="card_name" name="card_name" value="{{ form_data.get('card_name', '') }}" placeholder="Shadow Market User">
-                                </div>
-                                <div>
-                                    <label class="form-label" for="card_number">Card number</label>
-                                    <input class="form-control form-control-lg" id="card_number" name="card_number" value="{{ form_data.get('card_number', '') }}" placeholder="4242 4242 4242 4242">
-                                </div>
+                            <div class="p-3 rounded-3 border bg-light-subtle">
+                                <p class="mb-2"><strong>Secure Stripe Checkout</strong></p>
+                                <p class="mb-0 text-muted">
+                                    You will be redirected to Stripe's hosted payment page to complete card payment securely.
+                                    {% if not stripe_ready %}
+                                        Stripe is not configured on this environment yet.
+                                    {% endif %}
+                                </p>
                             </div>
                         </div>
 
@@ -111,7 +110,9 @@
                     </p>
                 </div>
 
-                <button class="btn btn-primary btn-lg w-100" type="submit">Place order</button>
+                <button class="btn btn-primary btn-lg w-100" type="submit">
+                    {% if form_data.get('payment_method', 'cod') == 'card' %}Continue to secure payment{% else %}Place order{% endif %}
+                </button>
             </form>
 
             <aside class="order-summary-card reveal-up">

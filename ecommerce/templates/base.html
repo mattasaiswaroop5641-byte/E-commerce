@@ -65,6 +65,8 @@
                     <div class="nav-actions ms-lg-auto">
                         <a href="{{ url_for('index') }}#catalog" class="nav-action-link">Browse</a>
                         <a href="{{ url_for('about') }}" class="nav-action-link">About</a>
+                        <a href="{{ url_for('track_order_lookup') }}" class="nav-action-link">Track</a>
+                        <a href="{{ url_for('support') }}" class="nav-action-link">Support</a>
                         <a href="{{ url_for('cart') }}" class="cart-link" aria-label="Shopping cart" title="Shopping cart">
                             <i class="bi bi-bag"></i>
                             <span>Cart</span>
@@ -78,6 +80,8 @@
                                 <ul class="dropdown-menu dropdown-menu-end">
                                     <li><a class="dropdown-item" href="{{ url_for('cart') }}">My Cart</a></li>
                                     <li><a class="dropdown-item" href="{{ url_for('checkout') }}">Checkout</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('track_order_lookup') }}">Track Orders</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('support') }}">Customer Support</a></li>
                                     <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
                                 </ul>
                             </div>
@@ -162,6 +166,8 @@
                         <li><a href="{{ url_for('index') }}#catalog">Featured catalog</a></li>
                         <li><a href="{{ url_for('cart') }}">Cart</a></li>
                         <li><a href="{{ url_for('checkout') }}">Checkout</a></li>
+                        <li><a href="{{ url_for('track_order_lookup') }}">Track order</a></li>
+                        <li><a href="{{ url_for('support') }}">Support</a></li>
                         <li><a href="{{ url_for('search') }}">All products</a></li>
                     </ul>
                 </div>

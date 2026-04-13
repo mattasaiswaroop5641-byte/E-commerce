@@ -13,9 +13,14 @@ from flask import Flask, flash, jsonify, redirect, render_template, request, ses
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user
 
 from forms import LoginForm, SignupForm
-from models import Interaction, User, db
+from models import Interaction, Order, SupportTicket, User, db
 from recommenders.collab import CollabRecommender
 from recommenders.content_based import ContentRecommender
+
+try:
+    import stripe # type: ignore
+except Exception:
+    stripe = None
 
 load_dotenv()
 
@@ -168,8 +173,8 @@ PAYMENT_METHODS = [
     },
     {
         "id": "card",
-        "label": "Credit / Debit Card",
-        "caption": "Secure card checkout with credit or debit cards.",
+        "label": "Card (Stripe)",
+        "caption": "Pay securely with Stripe checkout.",
         "icon": "bi-credit-card-2-front",
     },
     {
@@ -177,6 +182,45 @@ PAYMENT_METHODS = [
         "label": "Net Banking",
         "caption": "Checkout directly through your bank account.",
         "icon": "bi-bank",
+    },
+]
+
+ORDER_STATUS_FLOW = [
+    {
+        "id": "pending_payment",
+        "label": "Payment Pending",
+        "description": "Waiting for payment confirmation.",
+        "icon": "bi-hourglass-split",
+    },
+    {
+        "id": "confirmed",
+        "label": "Order Confirmed",
+        "description": "Your order was received successfully.",
+        "icon": "bi-check2-circle",
+    },
+    {
+        "id": "processing",
+        "label": "Processing",
+        "description": "We are packing your items.",
+        "icon": "bi-box-seam",
+    },
+    {
+        "id": "shipped",
+        "label": "Shipped",
+        "description": "Your package is on the move.",
+        "icon": "bi-truck",
+    },
+    {
+        "id": "out_for_delivery",
+        "label": "Out for Delivery",
+        "description": "Your package is near your address.",
+        "icon": "bi-bicycle",
+    },
+    {
+        "id": "delivered",
+        "label": "Delivered",
+        "description": "Delivered successfully.",
+        "icon": "bi-house-door",
     },
 ]
 
@@ -227,6 +271,52 @@ def infer_brand(name: Any) -> str:
 
 def format_money(value: Any) -> str:
     return f"${float(value):,.2f}"
+
+
+def get_stripe_config() -> dict[str, Any]:
+    return {
+        "secret_key": str(os.environ.get("STRIPE_SECRET_KEY", "")).strip(),
+        "publishable_key": str(os.environ.get("STRIPE_PUBLISHABLE_KEY", "")).strip(),
+        "currency": str(os.environ.get("STRIPE_CURRENCY", "usd")).strip().lower() or "usd",
+    }
+
+
+def is_stripe_ready() -> bool:
+    stripe_config = get_stripe_config()
+    return stripe is not None and bool(stripe_config["secret_key"])
+
+
+def build_tracking_timeline(current_status: str, placed_at_display: str, eta: str) -> list[dict[str, Any]]:
+    status_ids = [step["id"] for step in ORDER_STATUS_FLOW]
+    safe_status = current_status if current_status in status_ids else "processing"
+    active_index = status_ids.index(safe_status)
+    timeline: list[dict[str, Any]] = []
+
+    for index, step in enumerate(ORDER_STATUS_FLOW):
+        if index < active_index:
+            state = "completed"
+        elif index == active_index:
+            state = "active"
+        else:
+            state = "upcoming"
+
+        detail = step["description"]
+        if step["id"] == "confirmed":
+            detail = placed_at_display
+        elif step["id"] in {"shipped", "out_for_delivery", "delivered"}:
+            detail = f"Estimated by {eta}"
+
+        timeline.append(
+            {
+                "id": step["id"],
+                "title": step["label"],
+                "detail": detail,
+                "icon": step["icon"],
+                "state": state,
+            }
+        )
+
+    return timeline
 
 
 def build_unsplash_url(photo_id: str, width: int, height: int, quality: int = 82) -> str:
@@ -923,7 +1013,15 @@ def build_order_payload(cart_items: list[dict[str, Any]], summary: dict[str, Any
         PAYMENT_METHODS[0],
     )
     eta = (datetime.now(timezone.utc) + timedelta(days=4)).strftime("%A, %d %b")
-    payment_status = "Pay on delivery" if payment_method["id"] == "cod" else "Demo payment confirmed"
+    if payment_method["id"] == "cod":
+        payment_status = "Pay on delivery"
+        order_status = "confirmed"
+    elif payment_method["id"] == "card":
+        payment_status = "Awaiting Stripe payment"
+        order_status = "pending_payment"
+    else:
+        payment_status = "Awaiting manual payment confirmation"
+        order_status = "confirmed"
 
     tracking_number = f"TRK-{uuid4().hex[:10].upper()}"
     tracking_url = url_for('track_order', tracking_number=tracking_number, _external=True)
@@ -945,6 +1043,8 @@ def build_order_payload(cart_items: list[dict[str, Any]], summary: dict[str, Any
         "payment_method": payment_method["label"],
         "payment_status": payment_status,
         "payment_method_id": payment_method["id"],
+        "payment_gateway": "stripe" if payment_method["id"] == "card" else "manual",
+        "order_status": order_status,
         "items": cart_items,
         "summary": summary,
     }
@@ -956,6 +1056,165 @@ def save_order(order_payload: dict[str, Any]) -> None:
     session["orders"] = orders[:5]
     session["last_order"] = order_payload
     session.modified = True
+
+
+def order_record_to_payload(order: Order) -> dict[str, Any]:
+    tracking_url = url_for("track_order", tracking_number=order.tracking_number, _external=True)
+    return {
+        "id": order.order_id,
+        "placed_at": order.placed_at_display,
+        "eta": order.eta,
+        "tracking_number": order.tracking_number,
+        "tracking_url": tracking_url,
+        "customer": {
+            "full_name": order.customer_name,
+            "email": order.customer_email,
+            "phone": order.customer_phone,
+            "address": order.customer_address,
+            "city": order.customer_city,
+            "postal_code": order.customer_postal_code,
+        },
+        "payment_method": order.payment_method_label,
+        "payment_status": order.payment_status,
+        "payment_method_id": order.payment_method_id,
+        "payment_gateway": order.payment_gateway,
+        "payment_reference": order.payment_reference,
+        "order_status": order.status,
+        "items": list(order.items_json or []),
+        "summary": dict(order.summary_json or {}),
+    }
+
+
+def get_order_record_by_order_id(order_id: str) -> Optional[Order]:
+    return Order.query.filter_by(order_id=str(order_id).strip()).first() # type: ignore
+
+
+def get_order_record_by_tracking_number(tracking_number: str) -> Optional[Order]:
+    return Order.query.filter_by(tracking_number=str(tracking_number).strip().upper()).first() # type: ignore
+
+
+def upsert_order_record(order_payload: dict[str, Any], mark_email_sent: bool = False) -> Order:
+    order_record = get_order_record_by_order_id(order_payload["id"])
+    if order_record is None:
+        order_record = Order(order_id=order_payload["id"], tracking_number=order_payload["tracking_number"]) # type: ignore
+        db.session.add(order_record) # type: ignore
+
+    customer = order_payload["customer"]
+    order_record.user_id = getattr(current_user, "id", None) if current_user.is_authenticated else None # type: ignore
+    order_record.customer_name = customer["full_name"]
+    order_record.customer_email = customer["email"]
+    order_record.customer_phone = customer["phone"]
+    order_record.customer_address = customer["address"]
+    order_record.customer_city = customer["city"]
+    order_record.customer_postal_code = customer["postal_code"]
+    order_record.payment_method_id = order_payload["payment_method_id"]
+    order_record.payment_method_label = order_payload["payment_method"]
+    order_record.payment_status = order_payload["payment_status"]
+    order_record.payment_gateway = str(order_payload.get("payment_gateway", "manual"))
+    order_record.payment_reference = str(order_payload.get("payment_reference", ""))
+    order_record.status = str(order_payload.get("order_status", "processing"))
+    order_record.eta = order_payload["eta"]
+    order_record.placed_at_display = order_payload["placed_at"]
+    order_record.items_json = order_payload["items"]
+    order_record.summary_json = order_payload["summary"]
+    if mark_email_sent:
+        order_record.confirmation_email_sent = True
+
+    db.session.commit() # type: ignore
+    return order_record
+
+
+def update_order_payment_and_status(order_id: str, payment_status: str, order_status: str, payment_reference: str = "") -> None:
+    order_record = get_order_record_by_order_id(order_id)
+    if order_record is None:
+        return
+
+    order_record.payment_status = payment_status
+    order_record.status = order_status
+    if payment_reference:
+        order_record.payment_reference = payment_reference
+    db.session.commit() # type: ignore
+
+
+def mark_order_confirmation_email_sent(order_id: str) -> None:
+    order_record = get_order_record_by_order_id(order_id)
+    if order_record is None:
+        return
+    order_record.confirmation_email_sent = True
+    db.session.commit() # type: ignore
+
+
+def create_stripe_checkout_session(order_payload: dict[str, Any]) -> Any:
+    if not is_stripe_ready():
+        raise RuntimeError("Stripe is not configured.")
+
+    stripe_config = get_stripe_config()
+    stripe.api_key = stripe_config["secret_key"] # type: ignore[union-attr]
+    line_items: list[dict[str, Any]] = []
+    for item in order_payload["items"]:
+        unit_amount = max(int(round(float(item["price"]) * 100)), 1)
+        line_items.append(
+            {
+                "price_data": {
+                    "currency": stripe_config["currency"],
+                    "product_data": {"name": str(item["full_name"])[:120]},
+                    "unit_amount": unit_amount,
+                },
+                "quantity": int(item["quantity"]),
+            }
+        )
+
+    shipping_amount = float(order_payload["summary"].get("shipping", 0.0) or 0.0)
+    if shipping_amount > 0:
+        line_items.append(
+            {
+                "price_data": {
+                    "currency": stripe_config["currency"],
+                    "product_data": {"name": "Shipping"},
+                    "unit_amount": int(round(shipping_amount * 100)),
+                },
+                "quantity": 1,
+            }
+        )
+
+    tax_amount = float(order_payload["summary"].get("tax", 0.0) or 0.0)
+    if tax_amount > 0:
+        line_items.append(
+            {
+                "price_data": {
+                    "currency": stripe_config["currency"],
+                    "product_data": {"name": "Tax"},
+                    "unit_amount": int(round(tax_amount * 100)),
+                },
+                "quantity": 1,
+            }
+        )
+
+    success_url = (
+        url_for("stripe_checkout_success", order_id=order_payload["id"], _external=True)
+        + "?session_id={CHECKOUT_SESSION_ID}"
+    )
+    cancel_url = url_for("stripe_checkout_cancel", order_id=order_payload["id"], _external=True)
+
+    return stripe.checkout.Session.create( # type: ignore[union-attr]
+        mode="payment",
+        line_items=line_items,
+        success_url=success_url,
+        cancel_url=cancel_url,
+        customer_email=order_payload["customer"]["email"],
+        metadata={
+            "order_id": order_payload["id"],
+            "tracking_number": order_payload["tracking_number"],
+        },
+    )
+
+
+def get_tracking_history(order_payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return build_tracking_timeline(
+        str(order_payload.get("order_status", "processing")),
+        str(order_payload.get("placed_at", "")),
+        str(order_payload.get("eta", "")),
+    )
 
 
 def get_mail_config() -> dict[str, Any]:
@@ -1286,6 +1545,8 @@ def login():
             flash("Welcome back to ShadowMarket.", "success")
             return redirect(url_for("index"))
         flash("Invalid username or password.", "warning")
+    elif request.method == "POST":
+        flash("Please complete the login form correctly.", "warning")
 
     return render_template("login.html", form=form)
 
@@ -1317,6 +1578,8 @@ def signup():
 
         flash("Account created successfully. Please sign in.", "success")
         return redirect(url_for("login"))
+    elif request.method == "POST":
+        flash("Please fix the highlighted signup fields and try again.", "warning")
 
     return render_template("signup.html", form=form)
 
@@ -1524,21 +1787,59 @@ def checkout():
 
         if form_data["payment_method"] == "upi" and not form_data["upi_id"]:
             flash("Please enter a valid UPI or wallet handle.", "warning")
-        elif form_data["payment_method"] == "card" and (
-            not form_data["card_name"] or not form_data["card_number"]
-        ):
-            flash("Please enter the card holder name and card number.", "warning")
+        elif form_data["payment_method"] == "card" and not is_stripe_ready():
+            flash("Card checkout is temporarily unavailable. Configure Stripe keys to enable it.", "warning")
         elif form_data["payment_method"] == "netbanking" and not form_data["bank_name"]:
             flash("Please choose a bank for net banking.", "warning")
         else:
             order_payload = build_order_payload(cart_items, cart_summary, form_data)
-            record_order_interactions(cart_items)
             save_order(order_payload)
+            upsert_order_record(order_payload)
+
+            if form_data["payment_method"] == "card":
+                if not is_stripe_ready():
+                    flash("Stripe is not configured yet. Add STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY to enable card checkout.", "warning")
+                    return render_template(
+                        "checkout.html",
+                        cart_items=cart_items,
+                        cart_summary=cart_summary,
+                        payment_methods=PAYMENT_METHODS,
+                        form_data=form_data,
+                        stripe_ready=False,
+                    )
+
+                try:
+                    stripe_session = create_stripe_checkout_session(order_payload)
+                    order_payload["payment_reference"] = str(getattr(stripe_session, "id", ""))
+                    upsert_order_record(order_payload)
+                    session["pending_order_id"] = order_payload["id"]
+                    session.modified = True
+                    checkout_url = str(getattr(stripe_session, "url", "")).strip()
+                    if not checkout_url:
+                        raise RuntimeError("Stripe did not return a checkout URL.")
+                    return redirect(checkout_url, code=303)
+                except Exception as exc:
+                    app.logger.error("Stripe checkout creation failed for %s: %s", order_payload["id"], exc)
+                    flash("Could not start Stripe checkout. Please try again or choose another payment method.", "danger")
+                    return render_template(
+                        "checkout.html",
+                        cart_items=cart_items,
+                        cart_summary=cart_summary,
+                        payment_methods=PAYMENT_METHODS,
+                        form_data=form_data,
+                        stripe_ready=is_stripe_ready(),
+                    )
+
+            order_payload["order_status"] = "processing"
+            if form_data["payment_method"] != "cod":
+                order_payload["payment_status"] = "Payment submitted"
+
+            record_order_interactions(cart_items)
+            upsert_order_record(order_payload)
             save_cart_map({})
-            
-            # Send confirmation email with tracking
             send_order_email(order_payload, form_data["email"])
-            
+            mark_order_confirmation_email_sent(order_payload["id"])
+
             flash("Order placed successfully.", "success")
             return redirect(url_for("order_success", order_id=order_payload["id"]))
 
@@ -1548,36 +1849,234 @@ def checkout():
         cart_summary=cart_summary,
         payment_methods=PAYMENT_METHODS,
         form_data=form_data,
+        stripe_ready=is_stripe_ready(),
     )
+
+
+@app.route("/checkout/stripe-success/<order_id>")
+def stripe_checkout_success(order_id: str):
+    order_record = get_order_record_by_order_id(order_id)
+    if order_record is None:
+        flash("That Stripe checkout session is not linked to an order.", "warning")
+        return redirect(url_for("checkout"))
+
+    order_payload = order_record_to_payload(order_record)
+    session_id = str(request.args.get("session_id", "")).strip()
+    if not session_id:
+        flash("Payment session could not be verified.", "warning")
+        return redirect(url_for("checkout"))
+
+    if not is_stripe_ready():
+        flash("Stripe is not configured on this server.", "warning")
+        return redirect(url_for("checkout"))
+
+    try:
+        stripe_config = get_stripe_config()
+        stripe.api_key = stripe_config["secret_key"] # type: ignore[union-attr]
+        checkout_session = stripe.checkout.Session.retrieve(session_id) # type: ignore[union-attr]
+        payment_status = str(getattr(checkout_session, "payment_status", "unpaid")).lower()
+    except Exception as exc:
+        app.logger.error("Stripe session verification failed for %s: %s", order_id, exc)
+        flash("We could not verify payment yet. Please contact support if your card was charged.", "danger")
+        return redirect(url_for("checkout"))
+
+    if payment_status != "paid":
+        flash("Payment is still pending. Please complete checkout in Stripe.", "warning")
+        return redirect(url_for("checkout"))
+
+    update_order_payment_and_status(
+        order_id,
+        payment_status="Paid via Stripe",
+        order_status="processing",
+        payment_reference=session_id,
+    )
+
+    order_payload["payment_status"] = "Paid via Stripe"
+    order_payload["payment_reference"] = session_id
+    order_payload["order_status"] = "processing"
+    save_order(order_payload)
+
+    record_order_interactions(order_payload["items"])
+    save_cart_map({})
+
+    if not order_record.confirmation_email_sent:
+        send_order_email(order_payload, order_payload["customer"]["email"])
+        mark_order_confirmation_email_sent(order_payload["id"])
+
+    flash("Payment confirmed. Your order is now processing.", "success")
+    return redirect(url_for("order_success", order_id=order_id))
+
+
+@app.route("/checkout/stripe-cancel/<order_id>")
+def stripe_checkout_cancel(order_id: str):
+    order_record = get_order_record_by_order_id(order_id)
+    if order_record is not None:
+        update_order_payment_and_status(
+            order_id,
+            payment_status="Stripe checkout canceled",
+            order_status="pending_payment",
+            payment_reference=order_record.payment_reference,
+        )
+    flash("Stripe checkout canceled. You can retry card payment or choose another method.", "info")
+    return redirect(url_for("checkout"))
 
 
 @app.route("/order-success/<order_id>")
 def order_success(order_id: str):
-    last_order = session.get("last_order")
-    if last_order and last_order.get("id") == order_id:
-        order_payload = last_order
-    else:
-        order_payload = next(
-            (order for order in session.get("orders", []) if order.get("id") == order_id),
-            None,
-        )
+    order_record = get_order_record_by_order_id(order_id)
+    order_payload: Optional[dict[str, Any]] = order_record_to_payload(order_record) if order_record is not None else None
+    if order_payload is None:
+        last_order = session.get("last_order")
+        if last_order and last_order.get("id") == order_id:
+            order_payload = last_order
+        else:
+            order_payload = next(
+                (order for order in session.get("orders", []) if order.get("id") == order_id),
+                None,
+            )
 
     if order_payload is None:
         flash("We could not find that order confirmation.", "warning")
         return redirect(url_for("index"))
 
     recommended_products = get_all_family_cards()[:4]
+    tracking_timeline = get_tracking_history(order_payload)
     return render_template(
         "order_success.html",
         order=order_payload,
+        tracking_timeline=tracking_timeline,
         recommended_products=recommended_products,
+    )
+
+
+@app.route("/track", methods=["GET", "POST"])
+def track_order_lookup():
+    if request.method == "POST":
+        tracking_number = str(request.form.get("tracking_number", "")).strip().upper()
+        if not tracking_number:
+            flash("Enter a tracking number to continue.", "warning")
+            return redirect(url_for("track_order_lookup"))
+        return redirect(url_for("track_order", tracking_number=tracking_number))
+
+    recent_orders: list[dict[str, Any]] = []
+    if current_user.is_authenticated: # type: ignore
+        order_records: Any = Order.query.filter_by(user_id=current_user.id).order_by(Order.created_at.desc()).limit(5).all() # type: ignore
+        recent_orders = [order_record_to_payload(order_record) for order_record in order_records]
+
+    return render_template(
+        "track_order.html",
+        order=None,
+        tracking_timeline=[],
+        recent_orders=recent_orders,
+        entered_tracking_number="",
     )
 
 
 @app.route("/track/<tracking_number>")
 def track_order(tracking_number: str):
-    flash(f"Tracking information for {tracking_number}: Your package is in transit and on schedule!", "info")
-    return redirect(url_for("index"))
+    tracking_number = str(tracking_number).strip().upper()
+    order_record = get_order_record_by_tracking_number(tracking_number)
+    order_payload: Optional[dict[str, Any]] = order_record_to_payload(order_record) if order_record is not None else None
+
+    if order_payload is None:
+        session_order = next(
+            (order for order in session.get("orders", []) if str(order.get("tracking_number", "")).upper() == tracking_number),
+            None,
+        )
+        order_payload = session_order if isinstance(session_order, dict) else None
+
+    if order_payload is None:
+        flash(f"No order found with tracking number {tracking_number}.", "warning")
+        return redirect(url_for("track_order_lookup"))
+
+    tracking_timeline = get_tracking_history(order_payload)
+    return render_template(
+        "track_order.html",
+        order=order_payload,
+        tracking_timeline=tracking_timeline,
+        recent_orders=[],
+        entered_tracking_number=tracking_number,
+    )
+
+
+@app.route("/support", methods=["GET", "POST"])
+def support():
+    order_id = str(request.values.get("order_id", "")).strip()
+    tracking_number = str(request.values.get("tracking_number", "")).strip().upper()
+    linked_order = get_order_record_by_order_id(order_id) if order_id else None
+    if linked_order is None and tracking_number:
+        linked_order = get_order_record_by_tracking_number(tracking_number)
+
+    form_data: dict[str, str] = {
+        "full_name": getattr(current_user, "username", "") if current_user.is_authenticated else "", # type: ignore
+        "email": getattr(current_user, "email", "") if current_user.is_authenticated else "", # type: ignore
+        "subject": "",
+        "message": "",
+        "order_id": linked_order.order_id if linked_order is not None else order_id,
+        "tracking_number": linked_order.tracking_number if linked_order is not None else tracking_number,
+    }
+
+    created_ticket: Optional[SupportTicket] = None
+
+    if request.method == "POST":
+        for key in form_data:
+            form_data[key] = str(request.form.get(key, "")).strip()
+
+        required_fields = ["full_name", "email", "subject", "message"]
+        missing_fields = [field for field in required_fields if not form_data[field]]
+        if missing_fields:
+            flash("Please complete all required support fields.", "warning")
+        else:
+            ticket = SupportTicket( # type: ignore
+                ticket_id=f"SUP-{uuid4().hex[:8].upper()}",
+                user_id=getattr(current_user, "id", None) if current_user.is_authenticated else None, # type: ignore
+                order_id=form_data["order_id"],
+                tracking_number=form_data["tracking_number"],
+                customer_name=form_data["full_name"],
+                customer_email=form_data["email"],
+                subject=form_data["subject"],
+                message=form_data["message"],
+                status="open",
+            )
+            db.session.add(ticket) # type: ignore
+            db.session.commit() # type: ignore
+            created_ticket = ticket
+            flash(f"Support ticket {ticket.ticket_id} created successfully.", "success")
+
+            thread = threading.Thread(
+                target=send_html_email_async,
+                kwargs={
+                    "subject": f"Support ticket {ticket.ticket_id} received",
+                    "recipient_email": ticket.customer_email,
+                    "text_content": f"We have received your request ({ticket.ticket_id}). Our team will contact you shortly.",
+                    "html_content": f"""
+                    <html>
+                    <body style=\"font-family: Arial, sans-serif; color: #333;\">
+                        <h2>Support request received</h2>
+                        <p>Hi {ticket.customer_name}, your support ticket <strong>{ticket.ticket_id}</strong> is now open.</p>
+                        <p><strong>Subject:</strong> {ticket.subject}</p>
+                        <p>We will respond soon. You can reference this ticket ID anytime.</p>
+                    </body>
+                    </html>
+                    """,
+                },
+                daemon=True,
+            )
+            thread.start()
+
+    recent_tickets: list[SupportTicket] = []
+    if current_user.is_authenticated: # type: ignore
+        recent_tickets = SupportTicket.query.filter_by(user_id=current_user.id).order_by(SupportTicket.created_at.desc()).limit(6).all() # type: ignore
+    elif form_data["email"]:
+        recent_tickets = SupportTicket.query.filter_by(customer_email=form_data["email"]).order_by(SupportTicket.created_at.desc()).limit(6).all() # type: ignore
+
+    return render_template(
+        "support.html",
+        form_data=form_data,
+        linked_order=order_record_to_payload(linked_order) if linked_order is not None else None,
+        created_ticket=created_ticket,
+        recent_tickets=recent_tickets,
+    )
 
 
 @app.route("/interact", methods=["POST"])

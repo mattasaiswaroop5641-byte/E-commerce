@@ -8,6 +8,9 @@ A Flask ecommerce showcase with a richer catalog, grouped variants, cart and che
 - Search, category browsing, product detail, cart, checkout, and order confirmation
 - Login and signup with SQLite
 - Email notifications for account signup, successful login, and order confirmation
+- Real Stripe card checkout integration
+- Order tracking page with status timeline
+- Customer support ticket flow linked to orders/tracking
 - Content-based recommendations
 - Collaborative filtering recommendations
 - Larger generated dataset with online product imagery and demo interactions
@@ -53,6 +56,18 @@ MAIL_SEND_LOGIN_NOTIFICATIONS=true
 ```
 
 For Gmail, use an App Password (not your regular account password).
+
+### Stripe Setup (for real card payments)
+
+Set these values in `.env`:
+
+```bash
+STRIPE_PUBLISHABLE_KEY=pk_test_your_publishable_key
+STRIPE_SECRET_KEY=sk_test_your_secret_key
+STRIPE_CURRENCY=usd
+```
+
+Use Stripe test keys in development. Card checkout uses Stripe-hosted payment pages.
 
 ### Docker Deployment
 

@@ -42,7 +42,8 @@ class ContentRecommender:
             if column not in self.products.columns:
                 self.products[column] = ""
 
-        self.products["product_id"] = pd.to_numeric(self.products["product_id"], errors="coerce").fillna(0).astype(int)
+        product_id_series = pd.Series(pd.to_numeric(self.products["product_id"], errors="coerce"), index=self.products.index)
+        self.products["product_id"] = product_id_series.fillna(0).astype(int)
         self.products["product_family_id"] = self.products["product_family_id"].astype(str).str.strip()
         self.products["is_default"] = self.products["is_default"].apply(_coerce_bool)
 

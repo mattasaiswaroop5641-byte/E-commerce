@@ -1,280 +1,129 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
 {% block title %}About {{ site_name }}{% endblock %}
+{% block body_class %}about-page{% endblock %}
 
-{% block page_content %}
-<div class="container-xxl page-view">
-    <div class="page-hero about-hero">
-        <div class="page-hero__content">
-            <h1 class="page-hero__title">About {{ site_name }}</h1>
-            <p class="page-hero__subtitle">Premium shopping experience with AI-powered recommendations</p>
-        </div>
-    </div>
-
-    <div class="about-section">
-        <div class="container-xxl">
-            <div class="row g-5 align-items-center mb-5">
-                <div class="col-lg-6">
-                    <h2 class="section-title">What is {{ site_name }}?</h2>
-                    <p class="section-text">
-                        {{ site_name }} is a premium e-commerce platform curated for the discerning shopper. We bring together trending products across eight major categories with a focus on quality, variety, and exceptional user experience.
-                    </p>
-                    <p class="section-text">
-                        Built with modern technology and user-first design, {{ site_name }} makes shopping intuitive, secure, and enjoyable.
-                    </p>
-                </div>
-                <div class="col-lg-6">
-                    <div class="about-stats">
-                        <div class="stat-card">
-                            <div class="stat-number">240+</div>
-                            <div class="stat-label">Catalog Variants</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number">83</div>
-                            <div class="stat-label">Product Families</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number">8</div>
-                            <div class="stat-label">Categories</div>
-                        </div>
-                    </div>
-                </div>
+{% block content %}
+<section class="page-hero">
+    <div class="container-xxl">
+        <div class="page-hero__shell reveal-up">
+            <div class="page-hero__copy">
+                <span class="section-kicker">Our story</span>
+                <h1>About {{ site_name }}</h1>
+                <p>
+                    {{ site_name }} is built to make online shopping simple, premium, and trustworthy.
+                    We combine curated products, smart recommendations, secure checkout, and reliable support in one storefront.
+                </p>
             </div>
-
-            <hr class="section-divider">
-
-            <div class="row g-5 align-items-center mb-5">
-                <div class="col-lg-6 order-lg-2">
-                    <h2 class="section-title">Why Choose {{ site_name }}?</h2>
-                    <ul class="feature-list">
-                        <li><i class="bi bi-check-circle-fill"></i> <strong>Personalized Recommendations</strong> - AI learns your preferences</li>
-                        <li><i class="bi bi-check-circle-fill"></i> <strong>Curated Selection</strong> - Handpicked products across categories</li>
-                        <li><i class="bi bi-check-circle-fill"></i> <strong>Secure Checkout</strong> - Safe payment processing</li>
-                        <li><i class="bi bi-check-circle-fill"></i> <strong>Smooth Experience</strong> - Fast, responsive design</li>
-                        <li><i class="bi bi-check-circle-fill"></i> <strong>Product Variants</strong> - Multiple options per product</li>
-                        <li><i class="bi bi-check-circle-fill"></i> <strong>Easy Search</strong> - Find what you need instantly</li>
-                    </ul>
-                </div>
-                <div class="col-lg-6 order-lg-1">
-                    <div class="feature-image">
-                        <div class="feature-placeholder">
-                            <i class="bi bi-bag-heart-fill"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <hr class="section-divider">
-
-            <div class="row g-5">
-                <div class="col-md-6">
-                    <h3 class="about-subheading">Our Technology</h3>
-                    <p>{{ site_name }} is built with cutting-edge technologies:</p>
-                    <div class="tech-stack-list">
-                        <span class="tech-badge">Flask</span>
-                        <span class="tech-badge">Python</span>
-                        <span class="tech-badge">SQLAlchemy</span>
-                        <span class="tech-badge">scikit-learn</span>
-                        <span class="tech-badge">Bootstrap 5</span>
-                        <span class="tech-badge">SQLite</span>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <h3 class="about-subheading">AI Recommendations</h3>
-                    <p>We use two advanced recommendation systems:</p>
-                    <ul class="about-list">
-                        <li><strong>Content-Based Filtering</strong> - Finds similar products</li>
-                        <li><strong>Collaborative Filtering</strong> - Learns from user behavior</li>
-                    </ul>
-                </div>
-            </div>
-
-            <hr class="section-divider">
-
-            <div class="about-cta">
-                <h2>Ready to shop?</h2>
-                <p>Start exploring our curated collections today</p>
-                <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg">
-                    Browse Collections
-                </a>
+            <div class="page-hero__meta">
+                <span class="page-meta-pill">{{ catalog_stats.family_count }} families</span>
+                <span class="page-meta-pill">{{ catalog_stats.product_count }} products</span>
+                <span class="page-meta-pill">{{ catalog_stats.category_count }} categories</span>
             </div>
         </div>
     </div>
-</div>
+</section>
 
-<style>
-    .about-hero {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        color: white;
-        padding: 80px 20px;
-        text-align: center;
-        margin-bottom: 60px;
-    }
+<section class="section-shell">
+    <div class="container-xxl">
+        <div class="checkout-layout">
+            <article class="success-card reveal-up">
+                <span class="success-badge"><i class="bi bi-stars"></i> What we focus on</span>
+                <h1>Shopping that feels smooth from browse to delivery</h1>
+                <p class="helper-note">
+                    We designed {{ site_name }} to keep the full journey consistent: discover products quickly,
+                    check out safely, track your order live, and get help fast when needed.
+                </p>
 
-    .about-hero__title {
-        font-size: 3.5rem;
-        font-weight: 800;
-        margin-bottom: 20px;
-        line-height: 1.2;
-    }
+                <div class="success-meta-grid">
+                    <article class="detail-meta-card">
+                        <span class="detail-meta-card__label">Checkout</span>
+                        <strong>Stripe card payments + flexible methods</strong>
+                    </article>
+                    <article class="detail-meta-card">
+                        <span class="detail-meta-card__label">Tracking</span>
+                        <strong>Timeline-based order progress updates</strong>
+                    </article>
+                    <article class="detail-meta-card">
+                        <span class="detail-meta-card__label">Support</span>
+                        <strong>Ticket-based customer support flow</strong>
+                    </article>
+                    <article class="detail-meta-card">
+                        <span class="detail-meta-card__label">Recommendations</span>
+                        <strong>Content and collaborative AI models</strong>
+                    </article>
+                </div>
 
-    .about-hero__subtitle {
-        font-size: 1.3rem;
-        opacity: 0.9;
-    }
+                <div class="success-actions mt-4">
+                    <a href="{{ url_for('index') }}" class="btn btn-primary">Browse products</a>
+                    <a href="{{ url_for('track_order_lookup') }}" class="btn btn-outline-primary">Track an order</a>
+                    <a href="{{ url_for('support') }}" class="btn btn-outline-secondary">Contact support</a>
+                </div>
+            </article>
 
-    .about-section {
-        padding: 40px 0;
-    }
+            <aside class="order-summary-card reveal-up">
+                <span class="section-kicker">Trust and quality</span>
+                <h2>Why customers choose us</h2>
+                <div class="summary-list">
+                    <div class="summary-row">
+                        <span>Secure card processing</span>
+                        <span><i class="bi bi-shield-lock"></i></span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Order confirmation emails</span>
+                        <span><i class="bi bi-envelope-check"></i></span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Live tracking access</span>
+                        <span><i class="bi bi-truck"></i></span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Support ticket IDs</span>
+                        <span><i class="bi bi-headset"></i></span>
+                    </div>
+                    <div class="summary-row summary-row--highlight">
+                        <span>Built for reliability</span>
+                        <span>24x7 storefront</span>
+                    </div>
+                </div>
 
-    .section-title {
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin-bottom: 25px;
-        color: #1a1a2e;
-    }
+                <div class="checkout-section mt-3">
+                    <span class="section-kicker">Technology stack</span>
+                    <p class="helper-note">
+                        Flask, SQLAlchemy, Bootstrap, scikit-learn, and Stripe power the core shopping experience.
+                    </p>
+                </div>
+            </aside>
+        </div>
+    </div>
+</section>
 
-    .section-text {
-        font-size: 1.1rem;
-        line-height: 1.8;
-        color: #555;
-        margin-bottom: 20px;
-    }
+<section class="section-shell section-shell--tinted">
+    <div class="container-xxl">
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">How it works</span>
+                <h2 class="section-title">From discovery to doorstep</h2>
+            </div>
+        </div>
 
-    .section-divider {
-        margin: 80px 0;
-        border: none;
-        border-top: 2px solid #e0e0e0;
-    }
-
-    .about-stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 20px;
-    }
-
-    .stat-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 30px;
-        border-radius: 10px;
-        text-align: center;
-        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
-    }
-
-    .stat-number {
-        font-size: 2.5rem;
-        font-weight: 800;
-        margin-bottom: 10px;
-    }
-
-    .stat-label {
-        font-size: 0.95rem;
-        opacity: 0.9;
-    }
-
-    .feature-list {
-        list-style: none;
-        padding: 0;
-    }
-
-    .feature-list li {
-        display: flex;
-        align-items: center;
-        font-size: 1.1rem;
-        margin-bottom: 20px;
-        color: #333;
-    }
-
-    .feature-list i {
-        color: #667eea;
-        margin-right: 15px;
-        font-size: 1.3rem;
-    }
-
-    .feature-image {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        border-radius: 15px;
-        padding: 60px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 300px;
-    }
-
-    .feature-placeholder {
-        font-size: 5rem;
-        color: #667eea;
-        opacity: 0.5;
-    }
-
-    .about-subheading {
-        font-size: 1.5rem;
-        font-weight: 700;
-        margin-bottom: 15px;
-        color: #1a1a2e;
-    }
-
-    .about-list {
-        list-style: none;
-        padding: 0;
-    }
-
-    .about-list li {
-        margin-bottom: 15px;
-        color: #555;
-        line-height: 1.6;
-    }
-
-    .tech-stack-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 20px;
-    }
-
-    .tech-badge {
-        background: #f0f0f0;
-        color: #667eea;
-        padding: 8px 15px;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 0.9rem;
-    }
-
-    .about-cta {
-        text-align: center;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 60px 40px;
-        border-radius: 15px;
-        margin-top: 80px;
-    }
-
-    .about-cta h2 {
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin-bottom: 15px;
-    }
-
-    .about-cta p {
-        font-size: 1.2rem;
-        margin-bottom: 30px;
-        opacity: 0.95;
-    }
-
-    @media (max-width: 768px) {
-        .about-hero__title {
-            font-size: 2rem;
-        }
-
-        .section-title {
-            font-size: 1.8rem;
-        }
-
-        .about-stats {
-            grid-template-columns: 1fr;
-        }
-    }
-</style>
+        <div class="service-grid">
+            <article class="service-card reveal-up">
+                <span class="category-card__icon"><i class="bi bi-grid"></i></span>
+                <h3>Discover</h3>
+                <p>Explore curated categories, variant-rich product families, and recommendation-led suggestions.</p>
+            </article>
+            <article class="service-card reveal-up">
+                <span class="category-card__icon"><i class="bi bi-credit-card-2-front"></i></span>
+                <h3>Checkout</h3>
+                <p>Pay by Stripe card checkout or alternate payment methods with clear order confirmation.</p>
+            </article>
+            <article class="service-card reveal-up">
+                <span class="category-card__icon"><i class="bi bi-geo-alt"></i></span>
+                <h3>Track and support</h3>
+                <p>Track using your tracking ID and raise support tickets anytime for quick assistance.</p>
+            </article>
+        </div>
+    </div>
+</section>
 {% endblock %}

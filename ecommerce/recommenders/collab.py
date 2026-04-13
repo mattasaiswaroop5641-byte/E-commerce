@@ -38,7 +38,8 @@ class CollabRecommender:
             self.model = None
             return
 
-        self.products["product_id"] = pd.to_numeric(self.products["product_id"], errors="coerce").fillna(0).astype(int)
+        product_id_series = pd.Series(pd.to_numeric(self.products["product_id"], errors="coerce"), index=self.products.index)
+        self.products["product_id"] = product_id_series.fillna(0).astype(int)
         if "product_family_id" not in self.products.columns:
             self.products["product_family_id"] = self.products["product_id"].astype(str)
         self.products["product_family_id"] = self.products["product_family_id"].astype(str).str.strip()
@@ -62,9 +63,12 @@ class CollabRecommender:
             self.model = None
             return
 
-        interactions["user_id"] = pd.to_numeric(interactions["user_id"], errors="coerce").fillna(0).astype(int)
-        interactions["product_id"] = pd.to_numeric(interactions["product_id"], errors="coerce").fillna(0).astype(int)
-        interactions["quantity"] = pd.to_numeric(interactions["quantity"], errors="coerce").fillna(0).astype(float)
+        user_id_series = pd.Series(pd.to_numeric(interactions["user_id"], errors="coerce"), index=interactions.index)
+        product_id_series = pd.Series(pd.to_numeric(interactions["product_id"], errors="coerce"), index=interactions.index)
+        quantity_series = pd.Series(pd.to_numeric(interactions["quantity"], errors="coerce"), index=interactions.index)
+        interactions["user_id"] = user_id_series.fillna(0).astype(int)
+        interactions["product_id"] = product_id_series.fillna(0).astype(int)
+        interactions["quantity"] = quantity_series.fillna(0).astype(float)
         interactions = interactions[interactions["quantity"] > 0]
         interactions = interactions[interactions["product_id"].isin(self.products["product_id"])]
 
@@ -128,16 +132,8 @@ class CollabRecommender:
     def _prepare_popularity(self, interactions: pd.DataFrame):
         ranked_ids: list[int] = []
         if not interactions.empty:
-            popularity = [
-                int(product_id)
-                for product_id in (
-                interactions.groupby("product_id")["quantity"]
-                .sum()
-                .sort_values(ascending=False)
-                .index.astype(int)
-                .tolist()
-            )
-            ]
+            popularity_by_product = interactions.groupby("product_id")["quantity"].sum().sort_values(ascending=False)
+            popularity = [int(product_id) for product_id in popularity_by_product.index.tolist()]
             ranked_ids.extend(popularity)
 
         for product_id in self.products["product_id"].astype(int).tolist():

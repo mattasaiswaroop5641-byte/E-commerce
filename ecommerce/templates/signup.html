@@ -38,18 +38,30 @@
                     <div class="auth-field">
                         {{ form.username.label(class="form-label") }}
                         {{ form.username(class="form-control form-control-lg", placeholder="Choose a username") }}
+                        {% for error in form.username.errors %}
+                        <div class="text-danger small mt-1">{{ error }}</div>
+                        {% endfor %}
                     </div>
                     <div class="auth-field">
                         {{ form.email.label(class="form-label") }}
                         {{ form.email(class="form-control form-control-lg", placeholder="Enter your email address") }}
+                        {% for error in form.email.errors %}
+                        <div class="text-danger small mt-1">{{ error }}</div>
+                        {% endfor %}
                     </div>
                     <div class="auth-field">
                         {{ form.password.label(class="form-label") }}
                         {{ form.password(class="form-control form-control-lg", placeholder="Create a password") }}
+                        {% for error in form.password.errors %}
+                        <div class="text-danger small mt-1">{{ error }}</div>
+                        {% endfor %}
                     </div>
                     <div class="auth-field">
                         {{ form.confirm_password.label(class="form-label") }}
                         {{ form.confirm_password(class="form-control form-control-lg", placeholder="Confirm your password") }}
+                        {% for error in form.confirm_password.errors %}
+                        <div class="text-danger small mt-1">{{ error }}</div>
+                        {% endfor %}
                     </div>
                     <div class="d-grid">
                         {{ form.submit(class="btn btn-primary btn-lg") }}

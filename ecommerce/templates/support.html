@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Customer Support | {{ site_name }}{% endblock %}
+{% block body_class %}support-page{% endblock %}
+
+{% block content %}
+<section class="page-hero">
+    <div class="container-xxl">
+        <div class="page-hero__shell reveal-up">
+            <div class="page-hero__copy">
+                <span class="section-kicker">Customer support</span>
+                <h1>We are here to help</h1>
+                <p>Share your issue and our support team will follow up with your ticket ID and next steps.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-shell">
+    <div class="container-xxl">
+        <div class="checkout-layout">
+            <form method="post" class="checkout-form reveal-up">
+                <div class="checkout-section">
+                    <span class="section-kicker">Open a ticket</span>
+                    <h2>Contact support</h2>
+                    <div class="field-grid">
+                        <div>
+                            <label class="form-label" for="full_name">Full name</label>
+                            <input class="form-control form-control-lg" id="full_name" name="full_name" value="{{ form_data.get('full_name', '') }}" required>
+                        </div>
+                        <div>
+                            <label class="form-label" for="email">Email</label>
+                            <input class="form-control form-control-lg" id="email" type="email" name="email" value="{{ form_data.get('email', '') }}" required>
+                        </div>
+                        <div>
+                            <label class="form-label" for="order_id">Order ID (optional)</label>
+                            <input class="form-control form-control-lg" id="order_id" name="order_id" value="{{ form_data.get('order_id', '') }}" placeholder="SM-XXXXXXXX">
+                        </div>
+                        <div>
+                            <label class="form-label" for="tracking_number">Tracking number (optional)</label>
+                            <input class="form-control form-control-lg" id="tracking_number" name="tracking_number" value="{{ form_data.get('tracking_number', '') }}" placeholder="TRK-XXXXXXXXXX">
+                        </div>
+                        <div class="field-grid__full">
+                            <label class="form-label" for="subject">Subject</label>
+                            <input class="form-control form-control-lg" id="subject" name="subject" value="{{ form_data.get('subject', '') }}" placeholder="Example: Payment captured but order pending" required>
+                        </div>
+                        <div class="field-grid__full">
+                            <label class="form-label" for="message">Message</label>
+                            <textarea class="form-control form-control-lg" id="message" name="message" rows="5" required>{{ form_data.get('message', '') }}</textarea>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-lg mt-3" type="submit">Submit ticket</button>
+                </div>
+            </form>
+
+            <aside class="order-summary-card reveal-up">
+                <span class="section-kicker">Status</span>
+                <h2>Support response times</h2>
+                <div class="summary-list">
+                    <div class="summary-row">
+                        <span>Payment issues</span>
+                        <span>1-4 hrs</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Tracking issues</span>
+                        <span>2-6 hrs</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>General help</span>
+                        <span>Up to 24 hrs</span>
+                    </div>
+                </div>
+
+                {% if linked_order %}
+                    <div class="checkout-section mt-3">
+                        <span class="section-kicker">Linked order</span>
+                        <p class="mb-1"><strong>{{ linked_order.id }}</strong></p>
+                        <p class="mb-1">{{ linked_order.tracking_number }}</p>
+                        <p class="helper-note mb-0">{{ linked_order.order_status.replace('_', ' ')|title }}</p>
+                    </div>
+                {% endif %}
+
+                {% if created_ticket %}
+                    <div class="checkout-section mt-3">
+                        <span class="section-kicker">Ticket created</span>
+                        <h3>{{ created_ticket.ticket_id }}</h3>
+                        <p class="helper-note mb-0">Keep this ID for future updates.</p>
+                    </div>
+                {% endif %}
+            </aside>
+        </div>
+
+        {% if recent_tickets %}
+            <div class="section-heading mt-4">
+                <div>
+                    <span class="section-kicker">Recent tickets</span>
+                    <h2 class="section-title">Your latest support requests</h2>
+                </div>
+            </div>
+            <div class="success-order-items">
+                {% for ticket in recent_tickets %}
+                    <div class="success-order-item">
+                        <div>
+                            <strong>{{ ticket.ticket_id }}</strong>
+                            <small>{{ ticket.subject }}</small>
+                            {% if ticket.order_id %}
+                                <small>Order: {{ ticket.order_id }}</small>
+                            {% endif %}
+                        </div>
+                        <span class="badge text-bg-light">{{ ticket.status|title }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

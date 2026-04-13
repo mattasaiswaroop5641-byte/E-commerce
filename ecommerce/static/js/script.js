@@ -230,6 +230,7 @@ function initializeRevealAnimations() {
 function initializePaymentPanels() {
     const paymentInputs = Array.from(document.querySelectorAll('input[name="payment_method"]'));
     const panels = Array.from(document.querySelectorAll("[data-payment-detail]"));
+    const checkoutSubmit = document.querySelector(".checkout-form button[type='submit']");
     if (!paymentInputs.length || !panels.length) {
         return;
     }
@@ -248,6 +249,10 @@ function initializePaymentPanels() {
                 option.classList.toggle("is-active", input.checked);
             }
         });
+
+        if (checkoutSubmit) {
+            checkoutSubmit.textContent = selected === "card" ? "Continue to secure payment" : "Place order";
+        }
     };
 
     paymentInputs.forEach((input) => input.addEventListener("change", syncPanels));
