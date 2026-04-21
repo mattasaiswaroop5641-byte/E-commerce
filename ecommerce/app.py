@@ -1984,6 +1984,13 @@ def admin_logout():
 @app.route("/admin")
 @admin_required
 def admin_dashboard():
+    # Analytics metrics
+    total_orders = Order.query.count() # type: ignore
+    total_revenue = sum(float(o.summary_json.get("total_price", 0)) for o in Order.query.all() if hasattr(o, "summary_json")) # type: ignore
+    delivered_orders = Order.query.filter_by(status="delivered").count() # type: ignore
+    open_tickets_count = SupportTicket.query.filter_by(status="open").count() # type: ignore
+    
+    # Recent data
     recent_orders: Any = Order.query.order_by(Order.created_at.desc()).limit(10).all() # type: ignore
     open_tickets: Any = SupportTicket.query.filter_by(status="open").order_by(SupportTicket.created_at.desc()).limit(10).all() # type: ignore
     discounts: Any = DiscountRule.query.order_by(DiscountRule.updated_at.desc()).limit(10).all() # type: ignore
@@ -1991,6 +1998,10 @@ def admin_dashboard():
 
     return render_template(
         "admin/dashboard.html",
+        total_orders=total_orders,
+        total_revenue=round(total_revenue, 2),
+        delivered_orders=delivered_orders,
+        open_tickets_count=open_tickets_count,
         recent_orders=recent_orders,
         open_tickets=open_tickets,
         discounts=discounts,
@@ -2205,6 +2216,64 @@ def admin_product_edit(product_id: int):
 def admin_audit_log():
     entries: Any = AdminAuditLog.query.order_by(AdminAuditLog.created_at.desc()).limit(300).all() # type: ignore
     return render_template("admin/audit.html", entries=entries)
+
+
+@app.route("/admin/analytics")
+@admin_required
+def admin_analytics():
+    from datetime import datetime, timedelta
+    
+    # Overall stats
+    total_orders = Order.query.count() # type: ignore
+    total_revenue = sum(float(o.summary_json.get("total_price", 0)) for o in Order.query.all() if hasattr(o, "summary_json")) # type: ignore
+    delivered_orders = Order.query.filter_by(status="delivered").count() # type: ignore
+    pending_orders = Order.query.filter_by(status="processing").count() # type: ignore
+    open_tickets = SupportTicket.query.filter_by(status="open").count() # type: ignore
+    registered_users = User.query.count() # type: ignore
+    total_products = AdminProduct.query.count() # type: ignore
+    active_products = AdminProduct.query.filter_by(active=True).count() # type: ignore
+    
+    # Revenue by status
+    status_breakdown = {}
+    for status in ["pending_payment", "confirmed", "processing", "shipped", "out_for_delivery", "delivered"]:
+        orders_with_status = Order.query.filter_by(status=status).all() # type: ignore
+        revenue = sum(float(o.summary_json.get("total_price", 0)) for o in orders_with_status if hasattr(o, "summary_json"))
+        status_breakdown[status] = {
+            "count": len(orders_with_status),
+            "revenue": round(revenue, 2)
+        }
+    
+    # Last 7 days orders
+    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+    recent_orders = Order.query.filter(Order.created_at >= seven_days_ago).all() # type: ignore
+    recent_revenue = sum(float(o.summary_json.get("total_price", 0)) for o in recent_orders if hasattr(o, "summary_json"))
+    
+    # Top products by order count
+    all_orders = Order.query.all() # type: ignore
+    product_counts = {}
+    for order in all_orders:
+        if hasattr(order, "items_json") and order.items_json:
+            for item in order.items_json:
+                product_name = item.get("name", "Unknown")
+                product_counts[product_name] = product_counts.get(product_name, 0) + item.get("quantity", 1)
+    
+    top_products = sorted(product_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    
+    return render_template(
+        "admin/analytics.html",
+        total_orders=total_orders,
+        total_revenue=round(total_revenue, 2),
+        delivered_orders=delivered_orders,
+        pending_orders=pending_orders,
+        open_tickets=open_tickets,
+        registered_users=registered_users,
+        total_products=total_products,
+        active_products=active_products,
+        status_breakdown=status_breakdown,
+        recent_orders_count=len(recent_orders),
+        recent_revenue=round(recent_revenue, 2),
+        top_products=top_products,
+    )
 
 
 @app.route("/login", methods=["GET", "POST"])
