@@ -143,3 +143,89 @@ class AdminProduct(db.Model):
         default=db.func.current_timestamp(),
         onupdate=db.func.current_timestamp(),
     )
+
+
+class ProductCategory(db.Model):
+    __allow_unmapped__ = True
+    id: int = db.Column(db.Integer, primary_key=True)
+    name: str = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    description: str = db.Column(db.Text, nullable=False, default="")
+    active: bool = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    created_at: datetime = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+    updated_at: datetime = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=db.func.current_timestamp(),
+        onupdate=db.func.current_timestamp(),
+    )
+
+
+class ProductReview(db.Model):
+    __allow_unmapped__ = True
+    id: int = db.Column(db.Integer, primary_key=True)
+    product_id: int = db.Column(db.Integer, nullable=False, index=True)
+    customer_email: str = db.Column(db.String(150), nullable=False, index=True)
+    rating: int = db.Column(db.Integer, nullable=False, default=5)
+    title: str = db.Column(db.String(200), nullable=False, default="")
+    comment: str = db.Column(db.Text, nullable=False, default="")
+    verified_purchase: bool = db.Column(db.Boolean, nullable=False, default=False)
+    active: bool = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    created_at: datetime = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+    updated_at: datetime = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=db.func.current_timestamp(),
+        onupdate=db.func.current_timestamp(),
+    )
+
+
+class ProductInventory(db.Model):
+    __allow_unmapped__ = True
+    id: int = db.Column(db.Integer, primary_key=True)
+    product_id: int = db.Column(db.Integer, nullable=False, unique=True, index=True)
+    stock_quantity: int = db.Column(db.Integer, nullable=False, default=0)
+    low_stock_threshold: int = db.Column(db.Integer, nullable=False, default=10)
+    created_at: datetime = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+    updated_at: datetime = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=db.func.current_timestamp(),
+        onupdate=db.func.current_timestamp(),
+    )
+
+
+class OrderRefund(db.Model):
+    __allow_unmapped__ = True
+    id: int = db.Column(db.Integer, primary_key=True)
+    refund_id: str = db.Column(db.String(40), unique=True, nullable=False, index=True)
+    order_id: str = db.Column(db.String(40), nullable=False, index=True)
+    reason: str = db.Column(db.String(300), nullable=False, default="")
+    refund_amount: float = db.Column(db.Float, nullable=False, default=0.0)
+    status: str = db.Column(db.String(40), nullable=False, default="pending", index=True)
+    notes: str = db.Column(db.Text, nullable=False, default="")
+    created_at: datetime = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+    updated_at: datetime = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=db.func.current_timestamp(),
+        onupdate=db.func.current_timestamp(),
+    )
+
+
+class CustomerProfile(db.Model):
+    __allow_unmapped__ = True
+    id: int = db.Column(db.Integer, primary_key=True)
+    email: str = db.Column(db.String(150), unique=True, nullable=False, index=True)
+    name: str = db.Column(db.String(150), nullable=False, default="")
+    phone: str = db.Column(db.String(40), nullable=False, default="")
+    total_orders: int = db.Column(db.Integer, nullable=False, default=0)
+    total_spent: float = db.Column(db.Float, nullable=False, default=0.0)
+    blocked: bool = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    blocked_reason: str = db.Column(db.String(300), nullable=False, default="")
+    created_at: datetime = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+    updated_at: datetime = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=db.func.current_timestamp(),
+        onupdate=db.func.current_timestamp(),
+    )
