@@ -1294,9 +1294,14 @@ def send_html_email_async(subject: str, recipient_email: str, text_content: str,
 
     from_address = f"{mail['from_name']} <{mail['from_address']}>"
 
-    try:
-        resend_api_key = str(mail.get("resend_api_key", "") or "").strip()
-        if resend_api_key and resend is not None:
+    resend_api_key = str(mail.get("resend_api_key", "") or "").strip()
+    smtp_server = str(mail.get("smtp_server", "") or "").strip()
+    smtp_username = str(mail.get("smtp_username", "") or "").strip()
+    smtp_password = str(mail.get("smtp_password", "") or "").strip()
+    smtp_configured = bool(smtp_server and smtp_username and smtp_password)
+
+    if resend_api_key and resend is not None:
+        try:
             resend.api_key = resend_api_key # type: ignore
             resend.Emails.send({ # type: ignore
                 "from": from_address,
@@ -1307,26 +1312,32 @@ def send_html_email_async(subject: str, recipient_email: str, text_content: str,
             })
             app.logger.info("Email sent via Resend: %s -> %s", subject, recipient)
             return
+        except Exception as exc:
+            # Resend free-tier accounts may only send to the account email until a domain is verified.
+            # If SMTP is configured, fall back automatically.
+            if smtp_configured:
+                app.logger.warning("Resend email failed; falling back to SMTP: %s", exc)
+            else:
+                app.logger.exception("Failed to send email '%s' to %s: %s", subject, recipient, exc)
+                return
 
-        smtp_server = str(mail.get("smtp_server", "") or "").strip()
-        smtp_username = str(mail.get("smtp_username", "") or "").strip()
-        smtp_password = str(mail.get("smtp_password", "") or "").strip()
-        if not smtp_server or not smtp_username or not smtp_password:
-            app.logger.warning(
-                "Email disabled: configure RESEND_API_KEY or SMTP (MAIL_SERVER/MAIL_USERNAME/MAIL_PASSWORD)."
-            )
-            return
+    if not smtp_configured:
+        app.logger.warning(
+            "Email disabled: configure RESEND_API_KEY or SMTP (MAIL_SERVER/MAIL_USERNAME/MAIL_PASSWORD)."
+        )
+        return
 
-        smtp_port = int(mail.get("smtp_port", 587) or 587)
-        smtp_use_tls = bool(mail.get("smtp_use_tls", True))
+    smtp_port = int(mail.get("smtp_port", 587) or 587)
+    smtp_use_tls = bool(mail.get("smtp_use_tls", True))
 
-        msg = EmailMessage()
-        msg["Subject"] = subject
-        msg["From"] = from_address
-        msg["To"] = recipient
-        msg.set_content(text_content)
-        msg.add_alternative(html_content, subtype="html")
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_address
+    msg["To"] = recipient
+    msg.set_content(text_content)
+    msg.add_alternative(html_content, subtype="html")
 
+    try:
         with smtplib.SMTP(smtp_server, smtp_port, timeout=20) as smtp:
             smtp.ehlo()
             if smtp_use_tls:

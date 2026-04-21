@@ -53,6 +53,11 @@ MAIL_FROM_ADDRESS = onboarding@resend.dev (or your verified sender/domain)
 # MAIL_USE_TLS = true
 ```
 
+## Resend Free-Tier Note (No Custom Domain)
+
+If you do not own/verify a domain in Resend, Resend may restrict sending to only your own account email.
+To email other recipients without buying a domain, configure SMTP instead (see below).
+
 Example strong key:
 
 ```bash
