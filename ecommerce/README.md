@@ -46,13 +46,29 @@ python app.py
 Set these values in `.env`:
 
 ```bash
+MAIL_FROM_NAME=ShadowMarket
+MAIL_FROM_ADDRESS=onboarding@resend.dev
+MAIL_SEND_LOGIN_NOTIFICATIONS=true
+```
+
+Then choose one of these options:
+
+**Option A (Recommended): Resend**
+
+```bash
+RESEND_API_KEY=your_resend_api_key
+```
+
+In production, `MAIL_FROM_ADDRESS` should be a verified sender/domain in Resend.
+
+**Option B: SMTP (Gmail example)**
+
+```bash
 MAIL_SERVER=smtp.gmail.com
 MAIL_PORT=587
 MAIL_USERNAME=your-email@gmail.com
 MAIL_PASSWORD=your-app-password
-MAIL_FROM_NAME=ShadowMarket
-MAIL_FROM_ADDRESS=your-email@gmail.com
-MAIL_SEND_LOGIN_NOTIFICATIONS=true
+MAIL_USE_TLS=true
 ```
 
 For Gmail, use an App Password (not your regular account password).

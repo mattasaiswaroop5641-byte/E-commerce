@@ -41,6 +41,16 @@ Click **"Advanced"** and add:
 
 ```text
 SECRET_KEY = (generate a strong random string)
+RESEND_API_KEY = (recommended for email; your Resend API key)
+MAIL_FROM_NAME = ShadowMarket
+MAIL_FROM_ADDRESS = onboarding@resend.dev (or your verified sender/domain)
+
+# If you prefer SMTP instead of Resend:
+# MAIL_SERVER = smtp.gmail.com
+# MAIL_PORT = 587
+# MAIL_USERNAME = your-email@gmail.com
+# MAIL_PASSWORD = your-app-password
+# MAIL_USE_TLS = true
 ```
 
 Example strong key:

@@ -2,8 +2,8 @@ import os
 import re
 import smtplib
 import threading
-from email.message import EmailMessage
 from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
 from uuid import uuid4
 from typing import Any, Optional
 
@@ -22,6 +22,11 @@ try:
 except Exception:
     stripe = None
 
+try:
+    import resend # type: ignore
+except Exception:
+    resend = None
+
 load_dotenv()
 
 app = Flask(__name__)
@@ -34,11 +39,13 @@ login_manager = LoginManager(app) # type: ignore
 login_manager.login_view = "login" # type: ignore
 
 _db_initialized = False
+_mail_config_logged = False
 
 @app.before_request
 def initialize_database():
     global _db_initialized
     if not _db_initialized:
+        log_mail_configuration_once()
         db.create_all() # type: ignore
         _db_initialized = True
 
@@ -66,6 +73,53 @@ CATEGORY_FALLBACK_PHOTO_IDS = {
 
 # Optional runtime overrides loaded from a fix file (name -> image URL or data URI).
 FIX_IMAGE_MAP: dict[str, str] = {}
+
+
+def _mask_secret(value: str) -> str:
+    raw = str(value or "")
+    if len(raw) <= 4:
+        return "****"
+    return f"****{raw[-4:]}"
+
+
+def log_mail_configuration_once() -> None:
+    global _mail_config_logged
+    if _mail_config_logged:
+        return
+    _mail_config_logged = True
+
+    api_key = str(os.environ.get("RESEND_API_KEY", "") or "").strip()
+    smtp_server = str(os.environ.get("MAIL_SERVER", "") or "").strip()
+    smtp_username = str(os.environ.get("MAIL_USERNAME", "") or "").strip()
+    from_name = str(os.environ.get("MAIL_FROM_NAME", SITE_NAME) or SITE_NAME).strip() or SITE_NAME
+    from_address = str(os.environ.get("MAIL_FROM_ADDRESS", "onboarding@resend.dev") or "").strip()
+
+    if api_key and resend is not None:
+        app.logger.info(
+            "Email enabled: Resend configured (from=%s <%s>, key=%s).",
+            from_name,
+            from_address or "onboarding@resend.dev",
+            _mask_secret(api_key),
+        )
+        return
+
+    if api_key and resend is None:
+        app.logger.warning("Email disabled: resend package is not available.")
+        return
+
+    if smtp_server and smtp_username:
+        app.logger.info(
+            "Email enabled: SMTP configured (server=%s, user=%s, from=%s <%s>).",
+            smtp_server,
+            _mask_secret(smtp_username),
+            from_name,
+            from_address or "onboarding@resend.dev",
+        )
+        return
+
+    app.logger.warning(
+        "Email disabled: set RESEND_API_KEY (recommended) or SMTP (MAIL_SERVER/MAIL_USERNAME/MAIL_PASSWORD)."
+    )
 
 
 def normalize_mapping_key(value: Any) -> str:
@@ -1219,45 +1273,70 @@ def get_tracking_history(order_payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 def get_mail_config() -> dict[str, Any]:
     return {
-        "server": os.environ.get("MAIL_SERVER", "smtp.gmail.com"),
-        "port": int(os.environ.get("MAIL_PORT", "587")),
-        "username": os.environ.get("MAIL_USERNAME"),
-        "password": os.environ.get("MAIL_PASSWORD"),
-        "from_name": os.environ.get("MAIL_FROM_NAME", SITE_NAME),
-        "from_address": os.environ.get("MAIL_FROM_ADDRESS"),
+        "resend_api_key": str(os.environ.get("RESEND_API_KEY", "") or "").strip(),
+        "smtp_server": str(os.environ.get("MAIL_SERVER", "") or "").strip(),
+        "smtp_port": int(str(os.environ.get("MAIL_PORT", "587") or "587").strip() or "587"),
+        "smtp_username": str(os.environ.get("MAIL_USERNAME", "") or "").strip(),
+        "smtp_password": str(os.environ.get("MAIL_PASSWORD", "") or "").strip(),
+        "smtp_use_tls": coerce_bool(os.environ.get("MAIL_USE_TLS", "true")),
+        "from_name": str(os.environ.get("MAIL_FROM_NAME", SITE_NAME) or SITE_NAME).strip() or SITE_NAME,
+        "from_address": str(os.environ.get("MAIL_FROM_ADDRESS", "onboarding@resend.dev") or "").strip()
+        or "onboarding@resend.dev",
     }
 
 
 def send_html_email_async(subject: str, recipient_email: str, text_content: str, html_content: str) -> None:
     mail = get_mail_config()
-    smtp_user = mail["username"]
-    smtp_pass = mail["password"]
     recipient = str(recipient_email or "").strip()
 
     if not recipient:
         return
 
-    if not smtp_user or not smtp_pass:
-        app.logger.warning("Mail credentials (MAIL_USERNAME, MAIL_PASSWORD) are not set. Skipping email.")
-        return
-
-    from_address = mail["from_address"] or smtp_user
-
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = f"{mail['from_name']} <{from_address}>"
-    msg["To"] = recipient
-    msg.set_content(text_content)
-    msg.add_alternative(html_content, subtype="html")
+    from_address = f"{mail['from_name']} <{mail['from_address']}>"
 
     try:
-        with smtplib.SMTP(mail["server"], mail["port"]) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
-        app.logger.info("Email sent: %s -> %s", subject, recipient)
+        resend_api_key = str(mail.get("resend_api_key", "") or "").strip()
+        if resend_api_key and resend is not None:
+            resend.api_key = resend_api_key # type: ignore
+            resend.Emails.send({ # type: ignore
+                "from": from_address,
+                "to": recipient,
+                "subject": subject,
+                "text": text_content,
+                "html": html_content
+            })
+            app.logger.info("Email sent via Resend: %s -> %s", subject, recipient)
+            return
+
+        smtp_server = str(mail.get("smtp_server", "") or "").strip()
+        smtp_username = str(mail.get("smtp_username", "") or "").strip()
+        smtp_password = str(mail.get("smtp_password", "") or "").strip()
+        if not smtp_server or not smtp_username or not smtp_password:
+            app.logger.warning(
+                "Email disabled: configure RESEND_API_KEY or SMTP (MAIL_SERVER/MAIL_USERNAME/MAIL_PASSWORD)."
+            )
+            return
+
+        smtp_port = int(mail.get("smtp_port", 587) or 587)
+        smtp_use_tls = bool(mail.get("smtp_use_tls", True))
+
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = from_address
+        msg["To"] = recipient
+        msg.set_content(text_content)
+        msg.add_alternative(html_content, subtype="html")
+
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=20) as smtp:
+            smtp.ehlo()
+            if smtp_use_tls:
+                smtp.starttls()
+                smtp.ehlo()
+            smtp.login(smtp_username, smtp_password)
+            smtp.send_message(msg)
+        app.logger.info("Email sent via SMTP: %s -> %s", subject, recipient)
     except Exception as exc:
-        app.logger.error("Failed to send email '%s' to %s: %s", subject, recipient, exc)
+        app.logger.exception("Failed to send email '%s' to %s: %s", subject, recipient, exc)
 
 
 def send_order_email_async(order_payload: dict[str, Any], recipient_email: str) -> None:
@@ -2027,16 +2106,16 @@ def support():
         if missing_fields:
             flash("Please complete all required support fields.", "warning")
         else:
-            ticket = SupportTicket( # type: ignore
-                ticket_id=f"SUP-{uuid4().hex[:8].upper()}",
+            ticket = SupportTicket(
+                ticket_id=f"SUP-{uuid4().hex[:8].upper()}", # type: ignore
                 user_id=getattr(current_user, "id", None) if current_user.is_authenticated else None, # type: ignore
-                order_id=form_data["order_id"],
-                tracking_number=form_data["tracking_number"],
-                customer_name=form_data["full_name"],
-                customer_email=form_data["email"],
-                subject=form_data["subject"],
-                message=form_data["message"],
-                status="open",
+                order_id=form_data["order_id"], # type: ignore
+                tracking_number=form_data["tracking_number"], # type: ignore
+                customer_name=form_data["full_name"], # type: ignore
+                customer_email=form_data["email"], # type: ignore
+                subject=form_data["subject"], # type: ignore
+                message=form_data["message"], # type: ignore
+                status="open", # type: ignore
             )
             db.session.add(ticket) # type: ignore
             db.session.commit() # type: ignore
@@ -2131,4 +2210,3 @@ if __name__ == "__main__":
         init_recommenders(force_reload=True)
 
     app.run(debug=True)
-

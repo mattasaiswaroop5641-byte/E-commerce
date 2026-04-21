@@ -1,6 +1,9 @@
 # Environment Variables (Secrets)
 .env
 
+# Virtual environments
+.venv/
+
 # Python compilation files
 __pycache__/
 *.pyc
