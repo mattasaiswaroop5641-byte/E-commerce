@@ -1,0 +1,41 @@
+{% extends "admin/base.html" %}
+{% block title %}Audit · Admin · {{ site_name }}{% endblock %}
+{% block content %}
+<div class="admin-card rounded p-3">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <div class="fw-semibold">Audit log</div>
+        <div class="admin-muted small">Latest 300</div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Admin</th>
+                    <th>Action</th>
+                    <th>Target</th>
+                    <th>IP</th>
+                    <th>Detail</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in entries %}
+                    <tr>
+                        <td class="admin-muted">{{ entry.created_at }}</td>
+                        <td class="admin-muted">{{ entry.admin_email }}</td>
+                        <td class="fw-semibold">{{ entry.action }}</td>
+                        <td class="admin-muted">{{ entry.target_type }} {{ entry.target_id }}</td>
+                        <td class="admin-muted">{{ entry.ip_address }}</td>
+                        <td class="admin-muted" style="max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            {{ entry.detail }}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6" class="admin-muted">No audit entries yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+

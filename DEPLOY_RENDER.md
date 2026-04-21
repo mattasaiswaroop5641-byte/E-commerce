@@ -45,6 +45,13 @@ RESEND_API_KEY = (recommended for email; your Resend API key)
 MAIL_FROM_NAME = ShadowMarket
 MAIL_FROM_ADDRESS = onboarding@resend.dev (or your verified sender/domain)
 
+# Admin Panel (2FA)
+ADMIN_ENABLED = true
+ADMIN_EMAIL = admin@example.com
+ADMIN_PASSWORD_HASH = (recommended; generate locally)
+ADMIN_TOTP_SECRET = (base32 secret for Google Authenticator)
+ADMIN_REQUIRE_2FA = true
+
 # If you prefer SMTP instead of Resend:
 # MAIL_SERVER = smtp.gmail.com
 # MAIL_PORT = 587
@@ -62,6 +69,18 @@ Example strong key:
 
 ```bash
 python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Generate an admin password hash:
+
+```bash
+python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('ChangeMe'))"
+```
+
+Generate an admin TOTP secret (base32):
+
+```bash
+python -c "import base64,secrets; print(base64.b32encode(secrets.token_bytes(20)).decode().replace('=',''))"
 ```
 
 Then click **"Create Web Service"**.

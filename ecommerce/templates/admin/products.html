@@ -1,0 +1,51 @@
+{% extends "admin/base.html" %}
+{% block title %}Products · Admin · {{ site_name }}{% endblock %}
+{% block content %}
+<div class="admin-card rounded p-3">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <div class="fw-semibold">Admin products (DB)</div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="admin-muted small">These are appended to the CSV catalog at runtime.</span>
+            <a class="btn btn-sm btn-light" href="{{ url_for('admin_product_new') }}"><i class="bi bi-plus-circle"></i> Add</a>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Family</th>
+                    <th>Category</th>
+                    <th class="text-end">Price</th>
+                    <th>Status</th>
+                    <th class="text-end">Updated</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products %}
+                    <tr>
+                        <td class="fw-semibold">{{ product.product_id }}</td>
+                        <td class="admin-muted">{{ product.name }}</td>
+                        <td class="admin-muted">{{ product.product_family_id }}</td>
+                        <td class="admin-muted">{{ product.category }}</td>
+                        <td class="text-end admin-muted">{{ "$%.2f"|format(product.price) }}</td>
+                        <td><span class="badge badge-soft">{{ "active" if product.active else "inactive" }}</span></td>
+                        <td class="text-end admin-muted">{{ product.updated_at }}</td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_product_edit', product_id=product.product_id) }}">Edit</a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="8" class="admin-muted">No admin products yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="admin-muted small mt-3">
+        Note: On Render free plan with SQLite, DB data resets on redeploy unless you use a persistent database.
+    </div>
+</div>
+{% endblock %}
+

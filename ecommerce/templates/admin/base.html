@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Admin · {{ site_name }}{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background: #0b0c10; color: #e9ecef; }
+        .admin-shell { min-height: 100vh; }
+        .admin-nav { background: #0f1117; border-bottom: 1px solid rgba(255,255,255,.08); }
+        .admin-nav a { color: rgba(255,255,255,.82); text-decoration: none; }
+        .admin-nav a:hover { color: #fff; }
+        .admin-card { background: #121521; border: 1px solid rgba(255,255,255,.08); }
+        .admin-muted { color: rgba(255,255,255,.65); }
+        .table { color: #e9ecef; }
+        .table thead th { color: rgba(255,255,255,.75); border-color: rgba(255,255,255,.12); }
+        .table td, .table th { border-color: rgba(255,255,255,.10); }
+        .form-control, .form-select { background: #0f1117; color: #e9ecef; border-color: rgba(255,255,255,.14); }
+        .form-control:focus, .form-select:focus { box-shadow: none; border-color: rgba(255,255,255,.32); }
+        .btn-outline-light { border-color: rgba(255,255,255,.22); }
+        .badge-soft { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.10); }
+        .flash { border: 1px solid rgba(255,255,255,.10); background: rgba(255,255,255,.06); }
+    </style>
+</head>
+<body>
+    <div class="admin-shell">
+        <div class="admin-nav py-3">
+            <div class="container-xxl d-flex flex-wrap align-items-center gap-3 justify-content-between">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge badge-soft rounded-pill px-3 py-2"><i class="bi bi-shield-lock"></i> Admin</span>
+                    <a class="fw-semibold" href="{{ url_for('admin_dashboard') }}">{{ site_name }}</a>
+                    <span class="admin-muted small">secure console</span>
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-3">
+                    <a href="{{ url_for('admin_dashboard') }}">Dashboard</a>
+                    <a href="{{ url_for('admin_orders') }}">Orders</a>
+                    <a href="{{ url_for('admin_tickets') }}">Tickets</a>
+                    <a href="{{ url_for('admin_products') }}">Products</a>
+                    <a href="{{ url_for('admin_discounts') }}">Discounts</a>
+                    <a href="{{ url_for('admin_audit_log') }}">Audit</a>
+                    <span class="admin-muted small">{{ session.get('admin_email', '') }}</span>
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_logout') }}">Logout</a>
+                </div>
+            </div>
+        </div>
+
+        <main class="container-xxl py-4">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="mb-3">
+                        {% for category, message in messages %}
+                            <div class="flash rounded px-3 py-2 mb-2">
+                                <span class="me-2">
+                                    {% if category == 'success' %}<i class="bi bi-check-circle"></i>{% elif category == 'danger' %}<i class="bi bi-x-circle"></i>{% elif category == 'warning' %}<i class="bi bi-exclamation-triangle"></i>{% else %}<i class="bi bi-info-circle"></i>{% endif %}
+                                </span>
+                                <span>{{ message }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+

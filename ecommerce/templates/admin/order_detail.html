@@ -1,0 +1,103 @@
+{% extends "admin/base.html" %}
+{% block title %}Order {{ order.id }} · Admin · {{ site_name }}{% endblock %}
+{% block content %}
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="admin-card rounded p-3 mb-3">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="admin-muted small">Order</div>
+                    <div class="h5 mb-0">{{ order.id }}</div>
+                    <div class="admin-muted">Tracking: {{ order.tracking_number }}</div>
+                </div>
+                <a class="btn btn-sm btn-outline-light" href="{{ order.tracking_url }}" target="_blank">Open tracking</a>
+            </div>
+        </div>
+
+        <div class="admin-card rounded p-3 mb-3">
+            <div class="fw-semibold mb-2">Items</div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th class="text-end">Qty</th>
+                            <th class="text-end">Price</th>
+                            <th class="text-end">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in order.items %}
+                            <tr>
+                                <td class="fw-semibold">{{ item.full_name }}</td>
+                                <td class="text-end admin-muted">{{ item.quantity }}</td>
+                                <td class="text-end admin-muted">{{ item.price_display }}</td>
+                                <td class="text-end">{{ item.subtotal_display if item.subtotal_display is defined else "" }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-3 admin-muted">
+                <div class="d-flex justify-content-between"><span>Subtotal</span><span>{{ order.summary.subtotal_display }}</span></div>
+                <div class="d-flex justify-content-between"><span>Shipping</span><span>{{ order.summary.shipping_display }}</span></div>
+                <div class="d-flex justify-content-between"><span>Tax</span><span>{{ order.summary.tax_display }}</span></div>
+                <div class="d-flex justify-content-between fw-semibold mt-2"><span>Total</span><span>{{ order.summary.total_display }}</span></div>
+            </div>
+        </div>
+
+        <div class="admin-card rounded p-3">
+            <div class="fw-semibold mb-2">Customer</div>
+            <div class="admin-muted">
+                <div><strong class="text-light">{{ order.customer.full_name }}</strong></div>
+                <div>{{ order.customer.email }} · {{ order.customer.phone }}</div>
+                <div>{{ order.customer.address }}, {{ order.customer.city }} {{ order.customer.postal_code }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="admin-card rounded p-3 mb-3">
+            <div class="fw-semibold mb-2">Update status</div>
+            <form method="post">
+                {{ form.hidden_tag() }}
+                <div class="mb-2">
+                    {{ form.status.label(class="form-label admin-muted") }}
+                    {{ form.status(class="form-select") }}
+                </div>
+                <div class="mb-2">
+                    {{ form.note.label(class="form-label admin-muted") }}
+                    {{ form.note(class="form-control", rows="3", placeholder="Optional internal note") }}
+                </div>
+                <div class="d-grid">
+                    <button class="btn btn-light" type="submit">Save</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="admin-card rounded p-3 mb-3">
+            <div class="fw-semibold mb-2">Payment</div>
+            <div class="admin-muted small">
+                <div><strong class="text-light">Method:</strong> {{ order.payment_method }}</div>
+                <div><strong class="text-light">Status:</strong> {{ order.payment_status }}</div>
+                <div><strong class="text-light">Gateway:</strong> {{ order.payment_gateway }}</div>
+                <div><strong class="text-light">Reference:</strong> {{ order.payment_reference }}</div>
+            </div>
+        </div>
+
+        <div class="admin-card rounded p-3">
+            <div class="fw-semibold mb-2">Tracking timeline</div>
+            <div class="admin-muted small">
+                {% for step in tracking_timeline %}
+                    <div class="mb-2">
+                        <div class="fw-semibold text-light">{{ step.label }}</div>
+                        <div>{{ step.timestamp }}</div>
+                        <div>{{ step.description }}</div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

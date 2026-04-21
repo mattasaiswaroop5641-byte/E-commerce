@@ -1,0 +1,65 @@
+{% extends "admin/base.html" %}
+{% block title %}Discounts · Admin · {{ site_name }}{% endblock %}
+{% block content %}
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="admin-card rounded p-3">
+            <div class="fw-semibold mb-2">Add / update discount</div>
+            <form method="post">
+                {{ form.hidden_tag() }}
+                <div class="mb-2">
+                    {{ form.family_id.label(class="form-label admin-muted") }}
+                    {{ form.family_id(class="form-control", placeholder="electronics-macbook-air-m3") }}
+                </div>
+                <div class="mb-2">
+                    {{ form.percent_off.label(class="form-label admin-muted") }}
+                    {{ form.percent_off(class="form-control", placeholder="20") }}
+                </div>
+                <div class="form-check mb-3">
+                    {{ form.active(class="form-check-input") }}
+                    {{ form.active.label(class="form-check-label admin-muted") }}
+                </div>
+                <div class="d-grid">
+                    <button class="btn btn-light" type="submit">Save</button>
+                </div>
+            </form>
+            <div class="admin-muted small mt-3">
+                Discounts override the catalog’s default discount for a family ID.
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="admin-card rounded p-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <div class="fw-semibold">Current rules</div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Family</th>
+                            <th class="text-end">%</th>
+                            <th>Status</th>
+                            <th class="text-end">Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rule in rules %}
+                            <tr>
+                                <td class="fw-semibold">{{ rule.family_id }}</td>
+                                <td class="text-end admin-muted">{{ rule.percent_off }}</td>
+                                <td><span class="badge badge-soft">{{ "active" if rule.active else "inactive" }}</span></td>
+                                <td class="text-end admin-muted">{{ rule.updated_at }}</td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="4" class="admin-muted">No discount rules yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

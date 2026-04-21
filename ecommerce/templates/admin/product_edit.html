@@ -1,0 +1,67 @@
+{% extends "admin/base.html" %}
+{% block title %}{% if product %}Edit Product{% else %}Add Product{% endif %} · Admin · {{ site_name }}{% endblock %}
+{% block content %}
+<div class="admin-card rounded p-3">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <div class="fw-semibold">{% if product %}Edit product {{ product.product_id }}{% else %}Add product{% endif %}</div>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_products') }}">Back</a>
+    </div>
+    <form method="post">
+        {{ form.hidden_tag() }}
+        <div class="row g-3">
+            <div class="col-lg-8">
+                <div class="mb-2">
+                    {{ form.name.label(class="form-label admin-muted") }}
+                    {{ form.name(class="form-control", placeholder="Product name") }}
+                </div>
+                <div class="mb-2">
+                    {{ form.description.label(class="form-label admin-muted") }}
+                    {{ form.description(class="form-control", rows="5", placeholder="Short description") }}
+                </div>
+                <div class="mb-2">
+                    {{ form.image_url.label(class="form-label admin-muted") }}
+                    {{ form.image_url(class="form-control", placeholder="https://...") }}
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="mb-2">
+                    {{ form.product_family_id.label(class="form-label admin-muted") }}
+                    {{ form.product_family_id(class="form-control", placeholder="family-id") }}
+                </div>
+                <div class="mb-2">
+                    {{ form.category.label(class="form-label admin-muted") }}
+                    {{ form.category(class="form-control", placeholder="Electronics") }}
+                </div>
+                <div class="mb-2">
+                    {{ form.subcategory.label(class="form-label admin-muted") }}
+                    {{ form.subcategory(class="form-control") }}
+                </div>
+                <div class="mb-2">
+                    {{ form.brand.label(class="form-label admin-muted") }}
+                    {{ form.brand(class="form-control") }}
+                </div>
+                <div class="mb-2">
+                    {{ form.variant_label.label(class="form-label admin-muted") }}
+                    {{ form.variant_label(class="form-control", placeholder="e.g., 128GB") }}
+                </div>
+                <div class="mb-2">
+                    {{ form.price.label(class="form-label admin-muted") }}
+                    {{ form.price(class="form-control", placeholder="999.99") }}
+                </div>
+                <div class="form-check mb-2">
+                    {{ form.is_default(class="form-check-input") }}
+                    {{ form.is_default.label(class="form-check-label admin-muted") }}
+                </div>
+                <div class="form-check mb-3">
+                    {{ form.active(class="form-check-input") }}
+                    {{ form.active.label(class="form-check-label admin-muted") }}
+                </div>
+                <div class="d-grid">
+                    <button class="btn btn-light" type="submit">Save</button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+

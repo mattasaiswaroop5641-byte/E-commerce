@@ -12,3 +12,4 @@ flask-cors
 python-dotenv
 stripe
 resend
+pyotp

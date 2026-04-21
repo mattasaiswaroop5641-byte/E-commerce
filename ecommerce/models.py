@@ -88,3 +88,58 @@ class SupportTicket(db.Model):
     )
 
     user: Any = db.relationship('User', backref=db.backref('support_tickets', lazy=True))
+
+
+class DiscountRule(db.Model):
+    __allow_unmapped__ = True
+    id: int = db.Column(db.Integer, primary_key=True)
+    family_id: str = db.Column(db.String(140), nullable=False, index=True, unique=True)
+    percent_off: int = db.Column(db.Integer, nullable=False, default=0)
+    active: bool = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    created_at: datetime = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+    updated_at: datetime = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=db.func.current_timestamp(),
+        onupdate=db.func.current_timestamp(),
+    )
+
+
+class AdminAuditLog(db.Model):
+    __allow_unmapped__ = True
+    id: int = db.Column(db.Integer, primary_key=True)
+    admin_email: str = db.Column(db.String(180), nullable=False, index=True)
+    action: str = db.Column(db.String(180), nullable=False, index=True)
+    target_type: str = db.Column(db.String(80), nullable=False, default="", index=True)
+    target_id: str = db.Column(db.String(120), nullable=False, default="", index=True)
+    detail: str = db.Column(db.Text, nullable=False, default="")
+    ip_address: str = db.Column(db.String(80), nullable=False, default="")
+    created_at: datetime = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+
+
+class AdminProduct(db.Model):
+    __allow_unmapped__ = True
+    id: int = db.Column(db.Integer, primary_key=True)
+    product_id: int = db.Column(db.Integer, nullable=False, unique=True, index=True)
+    product_family_id: str = db.Column(db.String(140), nullable=False, index=True)
+    name: str = db.Column(db.String(220), nullable=False)
+    price: float = db.Column(db.Float, nullable=False, default=0.0)
+    category: str = db.Column(db.String(120), nullable=False, default="Uncategorized", index=True)
+    subcategory: str = db.Column(db.String(120), nullable=False, default="")
+    brand: str = db.Column(db.String(120), nullable=False, default="")
+    description: str = db.Column(db.Text, nullable=False, default="")
+    variant_type: str = db.Column(db.String(120), nullable=False, default="")
+    variant_value: str = db.Column(db.String(120), nullable=False, default="")
+    variant_label: str = db.Column(db.String(120), nullable=False, default="")
+    is_default: bool = db.Column(db.Boolean, nullable=False, default=True)
+    image_url: str = db.Column(db.Text, nullable=False, default="")
+    thumb_image_url: str = db.Column(db.Text, nullable=False, default="")
+    hero_image_url: str = db.Column(db.Text, nullable=False, default="")
+    active: bool = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    created_at: datetime = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+    updated_at: datetime = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=db.func.current_timestamp(),
+        onupdate=db.func.current_timestamp(),
+    )

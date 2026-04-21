@@ -85,6 +85,37 @@ STRIPE_CURRENCY=usd
 
 Use Stripe test keys in development. Card checkout uses Stripe-hosted payment pages.
 
+## Admin Panel (2FA)
+
+The app includes a secure admin console for managing orders, support tickets, discounts, and admin-added products.
+
+- Admin URL: `/admin/login`
+- Authentication: `ADMIN_EMAIL` + password + TOTP (Google Authenticator / Authy)
+
+Set these values in `.env` (or Render Environment Variables):
+
+```bash
+ADMIN_ENABLED=true
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD_HASH= # recommended (hashed)
+ADMIN_TOTP_SECRET=   # base32 secret for TOTP
+ADMIN_REQUIRE_2FA=true
+```
+
+Generate a password hash:
+
+```bash
+python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('ChangeMe'))"
+```
+
+Generate a TOTP secret (base32):
+
+```bash
+python -c "import base64,secrets; print(base64.b32encode(secrets.token_bytes(20)).decode().replace('=',''))"
+```
+
+Then add the secret to your authenticator app using “Enter a setup key”.
+
 ### Docker Deployment
 
 Build and run with Docker:

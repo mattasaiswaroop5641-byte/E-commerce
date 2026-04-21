@@ -2,18 +2,22 @@ import os
 import re
 import smtplib
 import threading
+import time
+from functools import wraps
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from uuid import uuid4
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import pandas as pd
 from dotenv import load_dotenv
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user
+from werkzeug.security import check_password_hash
 
+from admin_forms import AdminDiscountForm, AdminLoginForm, AdminOrderStatusForm, AdminProductForm, AdminTicketUpdateForm
 from forms import LoginForm, SignupForm
-from models import Interaction, Order, SupportTicket, User, db
+from models import AdminAuditLog, AdminProduct, DiscountRule, Interaction, Order, SupportTicket, User, db
 from recommenders.collab import CollabRecommender
 from recommenders.content_based import ContentRecommender
 
@@ -26,6 +30,11 @@ try:
     import resend # type: ignore
 except Exception:
     resend = None
+
+try:
+    import pyotp # type: ignore
+except Exception:
+    pyotp = None
 
 load_dotenv()
 
@@ -40,12 +49,15 @@ login_manager.login_view = "login" # type: ignore
 
 _db_initialized = False
 _mail_config_logged = False
+_admin_config_logged = False
+_admin_failed_attempts: dict[str, list[float]] = {}
 
 @app.before_request
 def initialize_database():
     global _db_initialized
     if not _db_initialized:
         log_mail_configuration_once()
+        log_admin_configuration_once()
         db.create_all() # type: ignore
         _db_initialized = True
 
@@ -73,6 +85,8 @@ CATEGORY_FALLBACK_PHOTO_IDS = {
 
 # Optional runtime overrides loaded from a fix file (name -> image URL or data URI).
 FIX_IMAGE_MAP: dict[str, str] = {}
+_discount_overrides_cache: dict[str, int] = {}
+_discount_overrides_loaded_at: float = 0.0
 
 
 def _mask_secret(value: str) -> str:
@@ -120,6 +134,132 @@ def log_mail_configuration_once() -> None:
     app.logger.warning(
         "Email disabled: set RESEND_API_KEY (recommended) or SMTP (MAIL_SERVER/MAIL_USERNAME/MAIL_PASSWORD)."
     )
+
+
+def get_admin_config() -> dict[str, Any]:
+    return {
+        "enabled": coerce_bool(os.environ.get("ADMIN_ENABLED", "true")),
+        "email": str(os.environ.get("ADMIN_EMAIL", "") or "").strip().lower(),
+        "password_hash": str(os.environ.get("ADMIN_PASSWORD_HASH", "") or "").strip(),
+        "password_plain": str(os.environ.get("ADMIN_PASSWORD", "") or ""),
+        "totp_secret": str(os.environ.get("ADMIN_TOTP_SECRET", "") or "").strip().replace(" ", ""),
+        "issuer": str(os.environ.get("ADMIN_2FA_ISSUER", f"{SITE_NAME} Admin") or f"{SITE_NAME} Admin").strip(),
+        "require_2fa": coerce_bool(os.environ.get("ADMIN_REQUIRE_2FA", "true")),
+        "max_attempts": int(str(os.environ.get("ADMIN_MAX_ATTEMPTS", "10") or "10")),
+        "window_seconds": int(str(os.environ.get("ADMIN_ATTEMPT_WINDOW_SECONDS", "600") or "600")),
+    }
+
+
+def log_admin_configuration_once() -> None:
+    global _admin_config_logged
+    if _admin_config_logged:
+        return
+    _admin_config_logged = True
+
+    cfg = get_admin_config()
+    if not cfg["enabled"]:
+        app.logger.info("Admin panel disabled (ADMIN_ENABLED=false).")
+        return
+
+    email = str(cfg.get("email") or "")
+    has_password = bool(cfg.get("password_hash") or cfg.get("password_plain"))
+    if not email or not has_password:
+        app.logger.warning("Admin panel not configured: set ADMIN_EMAIL and ADMIN_PASSWORD_HASH (or ADMIN_PASSWORD).")
+        return
+
+    require_2fa = bool(cfg.get("require_2fa"))
+    totp_secret = str(cfg.get("totp_secret") or "")
+    if require_2fa and (pyotp is None or not totp_secret):
+        app.logger.warning("Admin panel requires 2FA but is not ready: set ADMIN_TOTP_SECRET and install pyotp.")
+        return
+
+    app.logger.info(
+        "Admin panel enabled: email=%s, 2fa=%s.",
+        email,
+        "required" if require_2fa else "optional",
+    )
+
+
+def _admin_client_ip() -> str:
+    forwarded_for = str(request.headers.get("X-Forwarded-For", "") or "")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return str(request.remote_addr or "")
+
+
+def _admin_prune_attempts(ip: str, window_seconds: int) -> list[float]:
+    now = time.time()
+    attempts = _admin_failed_attempts.get(ip, [])
+    attempts = [timestamp for timestamp in attempts if now - timestamp <= window_seconds]
+    _admin_failed_attempts[ip] = attempts
+    return attempts
+
+
+def _admin_is_rate_limited(ip: str, max_attempts: int, window_seconds: int) -> bool:
+    attempts = _admin_prune_attempts(ip, window_seconds)
+    return len(attempts) >= max_attempts
+
+
+def _admin_record_failure(ip: str) -> None:
+    _admin_failed_attempts.setdefault(ip, []).append(time.time())
+
+
+def _admin_totp_valid(secret: str, code: str) -> bool:
+    if not secret or not code or pyotp is None:
+        return False
+    normalized = re.sub(r"\\s+", "", str(code))
+    if not normalized.isdigit():
+        return False
+    totp = pyotp.TOTP(secret) # type: ignore[union-attr]
+    return bool(totp.verify(normalized, valid_window=1))
+
+
+def admin_is_authenticated() -> bool:
+    cfg = get_admin_config()
+    if not cfg.get("enabled", True):
+        return False
+    expected_email = str(cfg.get("email") or "")
+    if not expected_email:
+        return False
+    return bool(session.get("admin_authed") is True and session.get("admin_email") == expected_email)
+
+
+def admin_required(view_fn):  # type: ignore
+    @wraps(view_fn)
+    def wrapper(*args, **kwargs):  # type: ignore
+        cfg = get_admin_config()
+        if not cfg.get("enabled", True):
+            flash("Admin panel is disabled.", "warning")
+            return redirect(url_for("index"))
+        if not admin_is_authenticated():
+            flash("Please sign in to access the admin panel.", "warning")
+            return redirect(url_for("admin_login", next=request.path))
+        return view_fn(*args, **kwargs)
+
+    return wrapper
+
+
+def admin_audit(action: str, target_type: str = "", target_id: str = "", detail: str = "") -> None:
+    cfg = get_admin_config()
+    if not cfg.get("enabled", True):
+        return
+    admin_email = str(session.get("admin_email") or "")
+    if not admin_email:
+        return
+
+    try:
+        entry = AdminAuditLog(
+            admin_email=admin_email,  # type: ignore
+            action=str(action or "")[:180],  # type: ignore
+            target_type=str(target_type or "")[:80],  # type: ignore
+            target_id=str(target_id or "")[:120],  # type: ignore
+            detail=str(detail or "")[:4000],  # type: ignore
+            ip_address=_admin_client_ip()[:80],  # type: ignore
+        )
+        db.session.add(entry) # type: ignore
+        db.session.commit() # type: ignore
+    except Exception:
+        app.logger.exception("Failed to write admin audit log entry.")
 
 
 def normalize_mapping_key(value: Any) -> str:
@@ -410,6 +550,46 @@ def _default_row_for_group(group: Any) -> Any:
     return defaults.iloc[0] if not defaults.empty else group.iloc[0]
 
 
+def invalidate_discount_overrides() -> None:
+    global _discount_overrides_cache
+    global _discount_overrides_loaded_at
+    _discount_overrides_cache = {}
+    _discount_overrides_loaded_at = 0.0
+
+
+def _load_discount_overrides_if_needed(max_age_seconds: int = 60) -> None:
+    global _discount_overrides_cache
+    global _discount_overrides_loaded_at
+    now = time.time()
+    if _discount_overrides_loaded_at and now - _discount_overrides_loaded_at < max_age_seconds:
+        return
+
+    overrides: dict[str, int] = {}
+    try:
+        rules: Any = DiscountRule.query.filter_by(active=True).all() # type: ignore
+        for rule in rules or []:
+            family_id = str(getattr(rule, "family_id", "") or "").strip()
+            if not family_id:
+                continue
+            overrides[family_id] = int(getattr(rule, "percent_off", 0) or 0)
+    except Exception:
+        # Catalog still works even if the DB isn't ready (e.g., first boot).
+        overrides = {}
+
+    _discount_overrides_cache = overrides
+    _discount_overrides_loaded_at = now
+
+
+def get_discount_override_percent(family_id: str) -> Optional[int]:
+    _load_discount_overrides_if_needed()
+    key = str(family_id or "").strip()
+    if not key:
+        return None
+    if key not in _discount_overrides_cache:
+        return None
+    return int(_discount_overrides_cache.get(key, 0))
+
+
 def enrich_product(product_like: Any, ensure_loaded: bool = True) -> dict[str, Any]:
     if ensure_loaded:
         ensure_catalog_loaded()
@@ -466,6 +646,10 @@ def enrich_product(product_like: Any, ensure_loaded: bool = True) -> dict[str, A
         discount_percent = 12 + (family_seed % 4) * 4
     else:
         discount_percent = 12 + (family_seed % 5) * 4
+
+    override_discount = get_discount_override_percent(family_id)
+    if override_discount is not None:
+        discount_percent = max(0, min(int(override_discount), 90))
 
     original_price = round(price / (1 - discount_percent / 100), 2) if price else 0.0
     rating = round(min(4.9, 4.2 + (family_seed % 7) * 0.1), 1)
@@ -630,6 +814,39 @@ def init_recommenders(force_reload: bool = False) -> None:
         return
 
     products_df = pd.read_csv(csv_path).fillna("")
+
+    # Append admin-managed products stored in the database (optional).
+    # Note: On Render free plan with SQLite, these rows will reset on redeploy unless you use a persistent DB.
+    try:
+        admin_products: Any = AdminProduct.query.filter_by(active=True).all() # type: ignore
+    except Exception:
+        admin_products = []
+
+    if admin_products:
+        extra_rows: list[dict[str, Any]] = []
+        for product in admin_products:
+            extra_rows.append(
+                {
+                    "product_id": int(getattr(product, "product_id", 0) or 0),
+                    "product_family_id": str(getattr(product, "product_family_id", "") or "").strip(),
+                    "name": str(getattr(product, "name", "") or "").strip(),
+                    "price": float(getattr(product, "price", 0.0) or 0.0),
+                    "category": str(getattr(product, "category", "") or "").strip(),
+                    "subcategory": str(getattr(product, "subcategory", "") or "").strip(),
+                    "brand": str(getattr(product, "brand", "") or "").strip(),
+                    "description": str(getattr(product, "description", "") or "").strip(),
+                    "variant_type": str(getattr(product, "variant_type", "") or "").strip(),
+                    "variant_value": str(getattr(product, "variant_value", "") or "").strip(),
+                    "variant_label": str(getattr(product, "variant_label", "") or "").strip(),
+                    "is_default": bool(getattr(product, "is_default", True)),
+                    "image_url": str(getattr(product, "image_url", "") or "").strip(),
+                    "thumb_image_url": str(getattr(product, "thumb_image_url", "") or "").strip(),
+                    "hero_image_url": str(getattr(product, "hero_image_url", "") or "").strip(),
+                }
+            )
+
+        extra_df = pd.DataFrame(extra_rows).fillna("")
+        products_df = pd.concat([products_df, extra_df], ignore_index=True)
     defaults = {
         "product_family_id": "",
         "brand": "",
@@ -1252,7 +1469,7 @@ def create_stripe_checkout_session(order_payload: dict[str, Any]) -> Any:
 
     return stripe.checkout.Session.create( # type: ignore[union-attr]
         mode="payment",
-        line_items=line_items,
+        line_items=cast(Any, line_items),
         success_url=success_url,
         cancel_url=cancel_url,
         customer_email=order_payload["customer"]["email"],
@@ -1394,25 +1611,65 @@ def send_order_email(order_payload: dict[str, Any], recipient_email: str) -> Non
         thread.start()
 
 
-def send_welcome_email_async(recipient_email: str, username: str, shop_url: str) -> None:
+def send_welcome_email_async(
+    recipient_email: str,
+    username: str,
+    shop_url: str,
+    track_url: str,
+    support_url: str,
+) -> None:
     send_html_email_async(
         subject="Welcome to ShadowMarket",
         recipient_email=recipient_email,
-        text_content="Welcome to ShadowMarket. Sign in and start shopping now.",
+        text_content=(
+            f"Welcome to ShadowMarket, {username}!\n\n"
+            f"Start shopping: {shop_url}\n"
+            f"Track an order: {track_url}\n"
+            f"Need help? {support_url}\n\n"
+            "If you didn't create this account, you can ignore this email."
+        ),
         html_content=f"""
         <html>
         <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-                <h2 style="color: #000;">Welcome to ShadowMarket, {username}!</h2>
-                <p>We are thrilled to have you on board.</p>
-                <p>
-                    Start exploring our catalog for the best deals on electronics, fashion, and more.
-                    We update our stock regularly with fresh drops and top deals.
-                </p>
-                <div style="text-align: center; margin: 30px 0;">
-                    <a href="{shop_url}" style="display: inline-block; padding: 12px 24px; background-color: #000; color: #fff; text-decoration: none; border-radius: 5px; font-weight: bold;">Start Shopping</a>
+            <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+                Your account is ready. Browse the catalog, track orders, and reach support anytime.
+            </div>
+            <div style="max-width: 600px; margin: 0 auto; padding: 22px; border: 1px solid #ddd; border-radius: 10px;">
+                <h2 style="color:#000; margin: 0 0 10px 0;">Welcome to ShadowMarket, {username}!</h2>
+                <p style="margin:0 0 14px 0;">We’re thrilled to have you on board.</p>
+
+                <div style="background:#f6f6f6; padding:14px 16px; border-radius:8px; margin: 14px 0;">
+                    <p style="margin:0 0 10px 0;"><strong>Quick start</strong></p>
+                    <ol style="margin:0; padding-left:18px;">
+                        <li>Explore the catalog and add items to your cart.</li>
+                        <li>Checkout and you’ll get an order confirmation email.</li>
+                        <li>Track your delivery anytime using your tracking number.</li>
+                    </ol>
                 </div>
-                <p>Thanks,<br><strong>The ShadowMarket Team</strong></p>
+
+                <div style="text-align:center; margin: 22px 0 10px 0;">
+                    <a href="{shop_url}" style="display:inline-block; padding:12px 22px; background:#000; color:#fff; text-decoration:none; border-radius:6px; font-weight:700;">
+                        Start Shopping
+                    </a>
+                </div>
+
+                <div style="text-align:center; margin: 10px 0 18px 0;">
+                    <a href="{track_url}" style="display:inline-block; padding:10px 18px; background:#fff; color:#000; text-decoration:none; border-radius:6px; border:1px solid #000; font-weight:700; margin-right:8px;">
+                        Track an Order
+                    </a>
+                    <a href="{support_url}" style="display:inline-block; padding:10px 18px; background:#fff; color:#000; text-decoration:none; border-radius:6px; border:1px solid #000; font-weight:700;">
+                        Contact Support
+                    </a>
+                </div>
+
+                <p style="margin:0 0 12px 0;">
+                    Tip: If you ever receive a login email you don’t recognize, change your password immediately.
+                </p>
+                <p style="margin:0; color:#666; font-size:12px;">
+                    If you didn’t create this account, you can safely ignore this email.
+                </p>
+
+                <p style="margin:18px 0 0 0;">Thanks,<br><strong>The ShadowMarket Team</strong></p>
             </div>
         </body>
         </html>
@@ -1423,7 +1680,13 @@ def send_welcome_email_async(recipient_email: str, username: str, shop_url: str)
 def send_welcome_email(recipient_email: str, username: str) -> None:
     if recipient_email:
         shop_url = url_for("index", _external=True)
-        thread = threading.Thread(target=send_welcome_email_async, args=(recipient_email, username, shop_url), daemon=True)
+        track_url = url_for("track_order_lookup", _external=True)
+        support_url = url_for("support", _external=True)
+        thread = threading.Thread(
+            target=send_welcome_email_async,
+            args=(recipient_email, username, shop_url, track_url, support_url),
+            daemon=True,
+        )
         thread.start()
 
 
@@ -1492,6 +1755,21 @@ def record_order_interactions(cart_items: list[dict[str, Any]]) -> None:
 
 @app.context_processor
 def inject_global_context() -> dict[str, Any]:
+    # Keep admin routes fast and isolated: do not force-load the full catalog/recommenders
+    # just to render the admin UI.
+    if request.path.startswith("/admin"):
+        return {
+            "site_name": SITE_NAME,
+            "categories": [],
+            "cart_count": 0,
+            "cart_total": format_money(0),
+            "footer_year": datetime.now(timezone.utc).year,
+            "search_terms": [],
+            "placeholder_image": url_for("static", filename="images/product-placeholder.svg"),
+            "catalog_stats": {"product_count": 0, "family_count": 0, "category_count": 0},
+            "sort_options": SORT_OPTIONS,
+        }
+
     ensure_catalog_loaded()
     categories = get_category_cards()
     cart_items = get_cart_items()
@@ -1619,6 +1897,312 @@ def index():
         new_arrivals=new_arrivals,
         spotlight_features=spotlight_features,
     )
+
+
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    cfg = get_admin_config()
+    if not cfg.get("enabled", True):
+        flash("Admin panel is disabled.", "warning")
+        return redirect(url_for("index"))
+
+    expected_email = str(cfg.get("email") or "")
+    has_password = bool(cfg.get("password_hash") or cfg.get("password_plain"))
+    if not expected_email or not has_password:
+        flash("Admin panel is not configured yet.", "warning")
+        return redirect(url_for("index"))
+
+    if admin_is_authenticated():
+        return redirect(url_for("admin_dashboard"))
+
+    form = AdminLoginForm()
+    if form.validate_on_submit():
+        ip = _admin_client_ip()
+        max_attempts = int(cfg.get("max_attempts", 10) or 10)
+        window_seconds = int(cfg.get("window_seconds", 600) or 600)
+        if _admin_is_rate_limited(ip, max_attempts, window_seconds):
+            flash("Too many failed attempts. Please wait a few minutes and try again.", "danger")
+            return render_template("admin/login.html", form=form)
+
+        email = str(form.email.data or "").strip().lower()
+        password = str(form.password.data or "")
+        if email != expected_email:
+            _admin_record_failure(ip)
+            flash("Invalid admin credentials.", "danger")
+            return render_template("admin/login.html", form=form)
+
+        password_hash = str(cfg.get("password_hash") or "")
+        password_plain = str(cfg.get("password_plain") or "")
+        ok_password = check_password_hash(password_hash, password) if password_hash else password == password_plain
+        if not ok_password:
+            _admin_record_failure(ip)
+            flash("Invalid admin credentials.", "danger")
+            return render_template("admin/login.html", form=form)
+
+        require_2fa = bool(cfg.get("require_2fa", True))
+        totp_secret = str(cfg.get("totp_secret") or "")
+        totp_code = str(form.totp_code.data or "").strip()
+        if require_2fa:
+            if pyotp is None or not totp_secret:
+                flash("Admin 2FA is not configured (missing pyotp or ADMIN_TOTP_SECRET).", "danger")
+                return render_template("admin/login.html", form=form)
+            if not _admin_totp_valid(totp_secret, totp_code):
+                _admin_record_failure(ip)
+                flash("Invalid authenticator code.", "danger")
+                return render_template("admin/login.html", form=form)
+
+        session["admin_authed"] = True
+        session["admin_email"] = expected_email
+        if require_2fa and form.remember.data:
+            session["admin_2fa_valid_until"] = int(time.time() + 30 * 24 * 3600)
+        else:
+            session.pop("admin_2fa_valid_until", None)
+
+        admin_audit("login", target_type="admin", target_id=expected_email, detail="Admin signed in")
+        flash("Signed in to admin.", "success")
+        next_path = str(request.args.get("next") or "").strip()
+        if next_path.startswith("/") and not next_path.startswith("//"):
+            return redirect(next_path)
+        return redirect(url_for("admin_dashboard"))
+    elif request.method == "POST":
+        flash("Please complete the admin login form correctly.", "warning")
+
+    return render_template("admin/login.html", form=form)
+
+
+@app.route("/admin/logout")
+def admin_logout():
+    if session.get("admin_authed"):
+        admin_audit("logout", target_type="admin", target_id=str(session.get("admin_email") or ""), detail="Admin signed out")
+    session.pop("admin_authed", None)
+    session.pop("admin_email", None)
+    session.pop("admin_2fa_valid_until", None)
+    flash("Admin signed out.", "info")
+    return redirect(url_for("admin_login"))
+
+
+@app.route("/admin")
+@admin_required
+def admin_dashboard():
+    recent_orders: Any = Order.query.order_by(Order.created_at.desc()).limit(10).all() # type: ignore
+    open_tickets: Any = SupportTicket.query.filter_by(status="open").order_by(SupportTicket.created_at.desc()).limit(10).all() # type: ignore
+    discounts: Any = DiscountRule.query.order_by(DiscountRule.updated_at.desc()).limit(10).all() # type: ignore
+    audit: Any = AdminAuditLog.query.order_by(AdminAuditLog.created_at.desc()).limit(10).all() # type: ignore
+
+    return render_template(
+        "admin/dashboard.html",
+        recent_orders=recent_orders,
+        open_tickets=open_tickets,
+        discounts=discounts,
+        audit=audit,
+    )
+
+
+@app.route("/admin/orders")
+@admin_required
+def admin_orders():
+    order_records: Any = Order.query.order_by(Order.created_at.desc()).limit(100).all() # type: ignore
+    return render_template("admin/orders.html", orders=order_records)
+
+
+@app.route("/admin/orders/<order_id>", methods=["GET", "POST"])
+@admin_required
+def admin_order_detail(order_id: str):
+    order_record = get_order_record_by_order_id(order_id)
+    if order_record is None:
+        flash("Order not found.", "warning")
+        return redirect(url_for("admin_orders"))
+
+    form = AdminOrderStatusForm(status=str(order_record.status or "processing"))
+    if form.validate_on_submit():
+        previous_status = str(order_record.status or "")
+        order_record.status = str(form.status.data or "processing")  # type: ignore
+        db.session.commit() # type: ignore
+        admin_audit(
+            "order_status_update",
+            target_type="order",
+            target_id=str(order_record.order_id),
+            detail=f"{previous_status} -> {order_record.status}. {str(form.note.data or '').strip()}",
+        )
+        flash("Order updated.", "success")
+        return redirect(url_for("admin_order_detail", order_id=order_id))
+
+    order_payload = order_record_to_payload(order_record)
+    tracking_timeline = get_tracking_history(order_payload)
+    return render_template(
+        "admin/order_detail.html",
+        order=order_payload,
+        order_record=order_record,
+        tracking_timeline=tracking_timeline,
+        form=form,
+    )
+
+
+@app.route("/admin/tickets")
+@admin_required
+def admin_tickets():
+    tickets: Any = SupportTicket.query.order_by(SupportTicket.created_at.desc()).limit(200).all() # type: ignore
+    return render_template("admin/tickets.html", tickets=tickets)
+
+
+@app.route("/admin/tickets/<ticket_id>", methods=["GET", "POST"])
+@admin_required
+def admin_ticket_detail(ticket_id: str):
+    ticket: Any = SupportTicket.query.filter_by(ticket_id=str(ticket_id).strip()).first() # type: ignore
+    if ticket is None:
+        flash("Ticket not found.", "warning")
+        return redirect(url_for("admin_tickets"))
+
+    form = AdminTicketUpdateForm(status=str(getattr(ticket, "status", "open") or "open"))
+    if form.validate_on_submit():
+        previous_status = str(getattr(ticket, "status", "") or "")
+        ticket.status = str(form.status.data or "open")  # type: ignore
+        db.session.commit() # type: ignore
+        admin_audit(
+            "ticket_update",
+            target_type="ticket",
+            target_id=str(ticket.ticket_id),
+            detail=f"{previous_status} -> {ticket.status}. {str(form.note.data or '').strip()}",
+        )
+        flash("Ticket updated.", "success")
+        return redirect(url_for("admin_ticket_detail", ticket_id=ticket_id))
+
+    linked_order = get_order_record_by_order_id(str(getattr(ticket, "order_id", "") or ""))
+    return render_template("admin/ticket_detail.html", ticket=ticket, linked_order=linked_order, form=form)
+
+
+@app.route("/admin/discounts", methods=["GET", "POST"])
+@admin_required
+def admin_discounts():
+    form = AdminDiscountForm()
+    if form.validate_on_submit():
+        family_id = str(form.family_id.data or "").strip()
+        percent_off = int(form.percent_off.data or 0)
+        active = bool(form.active.data)
+
+        rule: Any = DiscountRule.query.filter_by(family_id=family_id).first() # type: ignore
+        created = False
+        if rule is None:
+            rule = DiscountRule(family_id=family_id) # type: ignore
+            db.session.add(rule) # type: ignore
+            created = True
+
+        rule.percent_off = percent_off  # type: ignore
+        rule.active = active  # type: ignore
+        db.session.commit() # type: ignore
+
+        invalidate_discount_overrides()
+        global catalog_ready
+        catalog_ready = False
+
+        admin_audit(
+            "discount_upsert",
+            target_type="discount",
+            target_id=family_id,
+            detail=f"{'created' if created else 'updated'} percent={percent_off} active={active}",
+        )
+        flash("Discount saved.", "success")
+        return redirect(url_for("admin_discounts"))
+
+    rules: Any = DiscountRule.query.order_by(DiscountRule.updated_at.desc()).all() # type: ignore
+    return render_template("admin/discounts.html", rules=rules, form=form)
+
+
+@app.route("/admin/products")
+@admin_required
+def admin_products():
+    products: Any = AdminProduct.query.order_by(AdminProduct.updated_at.desc()).all() # type: ignore
+    return render_template("admin/products.html", products=products)
+
+
+@app.route("/admin/products/new", methods=["GET", "POST"])
+@admin_required
+def admin_product_new():
+    form = AdminProductForm()
+    if form.validate_on_submit():
+        ensure_catalog_loaded()
+        next_product_id = int(products_df["product_id"].max()) + 1 if products_df is not None and not products_df.empty else 1 # type: ignore
+
+        record = AdminProduct(  # type: ignore
+            product_id=next_product_id,
+            product_family_id=str(form.product_family_id.data or "").strip(),
+            name=str(form.name.data or "").strip(),
+            price=float(form.price.data or 0.0),
+            category=str(form.category.data or "").strip(),
+            subcategory=str(form.subcategory.data or "").strip(),
+            brand=str(form.brand.data or "").strip(),
+            description=str(form.description.data or "").strip(),
+            variant_label=str(form.variant_label.data or "").strip(),
+            is_default=bool(form.is_default.data),
+            image_url=str(form.image_url.data or "").strip(),
+            thumb_image_url=str(form.image_url.data or "").strip(),
+            hero_image_url=str(form.image_url.data or "").strip(),
+            active=bool(form.active.data),
+        )
+        db.session.add(record) # type: ignore
+        db.session.commit() # type: ignore
+
+        global catalog_ready
+        catalog_ready = False
+        admin_audit("product_create", target_type="product", target_id=str(next_product_id), detail=record.name)
+        flash("Product added (stored in DB).", "success")
+        return redirect(url_for("admin_products"))
+
+    return render_template("admin/product_edit.html", form=form, product=None)
+
+
+@app.route("/admin/products/<int:product_id>", methods=["GET", "POST"])
+@admin_required
+def admin_product_edit(product_id: int):
+    product: Any = AdminProduct.query.filter_by(product_id=int(product_id)).first() # type: ignore
+    if product is None:
+        flash("Admin product not found.", "warning")
+        return redirect(url_for("admin_products"))
+
+    form = AdminProductForm(
+        name=str(product.name or ""),
+        product_family_id=str(product.product_family_id or ""),
+        category=str(product.category or ""),
+        subcategory=str(product.subcategory or ""),
+        brand=str(product.brand or ""),
+        description=str(product.description or ""),
+        price=float(product.price or 0.0),
+        image_url=str(product.image_url or ""),
+        variant_label=str(product.variant_label or ""),
+        is_default=bool(product.is_default),
+        active=bool(product.active),
+    )
+    if form.validate_on_submit():
+        product.product_family_id = str(form.product_family_id.data or "").strip()  # type: ignore
+        product.name = str(form.name.data or "").strip()  # type: ignore
+        product.price = float(form.price.data or 0.0)  # type: ignore
+        product.category = str(form.category.data or "").strip()  # type: ignore
+        product.subcategory = str(form.subcategory.data or "").strip()  # type: ignore
+        product.brand = str(form.brand.data or "").strip()  # type: ignore
+        product.description = str(form.description.data or "").strip()  # type: ignore
+        product.variant_label = str(form.variant_label.data or "").strip()  # type: ignore
+        product.is_default = bool(form.is_default.data)  # type: ignore
+        product.active = bool(form.active.data)  # type: ignore
+        image_url = str(form.image_url.data or "").strip()
+        product.image_url = image_url  # type: ignore
+        product.thumb_image_url = image_url  # type: ignore
+        product.hero_image_url = image_url  # type: ignore
+        db.session.commit() # type: ignore
+
+        global catalog_ready
+        catalog_ready = False
+        admin_audit("product_update", target_type="product", target_id=str(product_id), detail=product.name)
+        flash("Product updated.", "success")
+        return redirect(url_for("admin_product_edit", product_id=product_id))
+
+    return render_template("admin/product_edit.html", form=form, product=product)
+
+
+@app.route("/admin/audit")
+@admin_required
+def admin_audit_log():
+    entries: Any = AdminAuditLog.query.order_by(AdminAuditLog.created_at.desc()).limit(300).all() # type: ignore
+    return render_template("admin/audit.html", entries=entries)
 
 
 @app.route("/login", methods=["GET", "POST"])

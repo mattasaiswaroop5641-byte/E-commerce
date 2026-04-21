@@ -1,0 +1,41 @@
+{% extends "admin/base.html" %}
+{% block title %}Tickets · Admin · {{ site_name }}{% endblock %}
+{% block content %}
+<div class="admin-card rounded p-3">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <div class="fw-semibold">Support tickets</div>
+        <div class="admin-muted small">Latest 200</div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Status</th>
+                    <th>Customer</th>
+                    <th>Subject</th>
+                    <th class="text-end">Created</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ticket in tickets %}
+                    <tr>
+                        <td class="fw-semibold">{{ ticket.ticket_id }}</td>
+                        <td><span class="badge badge-soft">{{ ticket.status }}</span></td>
+                        <td class="admin-muted">{{ ticket.customer_email }}</td>
+                        <td class="admin-muted">{{ ticket.subject }}</td>
+                        <td class="text-end admin-muted">{{ ticket.created_at }}</td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_ticket_detail', ticket_id=ticket.ticket_id) }}">Open</a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6" class="admin-muted">No tickets yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
