@@ -55,6 +55,8 @@ class AdminProductForm(FlaskForm):
     brand = StringField("Brand", validators=[OptionalValidator(), Length(max=120)])
     description = TextAreaField("Description", validators=[OptionalValidator(), Length(max=2000)])
     price = DecimalField("Price", places=2, rounding=None, validators=[DataRequired(), NumberRange(min=0, max=1_000_000)])
+    variant_type = StringField("Variant Type", validators=[OptionalValidator(), Length(max=120)])
+    variant_value = StringField("Variant Value", validators=[OptionalValidator(), Length(max=120)])
     image_url = StringField("Image URL", validators=[OptionalValidator(), Length(max=2000)])
     variant_label = StringField("Variant Label", validators=[OptionalValidator(), Length(max=120)])
     is_default = BooleanField("Default variant", default=True)

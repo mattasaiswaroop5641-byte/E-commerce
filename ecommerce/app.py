@@ -2123,21 +2123,23 @@ def admin_product_new():
         ensure_catalog_loaded()
         next_product_id = int(products_df["product_id"].max()) + 1 if products_df is not None and not products_df.empty else 1 # type: ignore
 
-        record = AdminProduct(  # type: ignore
-            product_id=next_product_id,
-            product_family_id=str(form.product_family_id.data or "").strip(),
-            name=str(form.name.data or "").strip(),
-            price=float(form.price.data or 0.0),
-            category=str(form.category.data or "").strip(),
-            subcategory=str(form.subcategory.data or "").strip(),
-            brand=str(form.brand.data or "").strip(),
-            description=str(form.description.data or "").strip(),
-            variant_label=str(form.variant_label.data or "").strip(),
-            is_default=bool(form.is_default.data),
-            image_url=str(form.image_url.data or "").strip(),
-            thumb_image_url=str(form.image_url.data or "").strip(),
-            hero_image_url=str(form.image_url.data or "").strip(),
-            active=bool(form.active.data),
+        record = AdminProduct(
+            product_id=next_product_id,  # type: ignore[call-arg]
+            product_family_id=str(form.product_family_id.data or "").strip(),  # type: ignore[call-arg]
+            name=str(form.name.data or "").strip(),  # type: ignore[call-arg]
+            price=float(form.price.data or 0.0),  # type: ignore[call-arg]
+            category=str(form.category.data or "").strip(),  # type: ignore[call-arg]
+            subcategory=str(form.subcategory.data or "").strip(),  # type: ignore[call-arg]
+            brand=str(form.brand.data or "").strip(),  # type: ignore[call-arg]
+            description=str(form.description.data or "").strip(),  # type: ignore[call-arg]
+            variant_type=str(form.variant_type.data or "").strip(),  # type: ignore[call-arg]
+            variant_value=str(form.variant_value.data or "").strip(),  # type: ignore[call-arg]
+            variant_label=str(form.variant_label.data or "").strip(),  # type: ignore[call-arg]
+            is_default=bool(form.is_default.data),  # type: ignore[call-arg]
+            image_url=str(form.image_url.data or "").strip(),  # type: ignore[call-arg]
+            thumb_image_url=str(form.image_url.data or "").strip(),  # type: ignore[call-arg]
+            hero_image_url=str(form.image_url.data or "").strip(),  # type: ignore[call-arg]
+            active=bool(form.active.data),  # type: ignore[call-arg]
         )
         db.session.add(record) # type: ignore
         db.session.commit() # type: ignore
