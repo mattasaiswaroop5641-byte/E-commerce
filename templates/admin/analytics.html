@@ -1,0 +1,94 @@
+{% extends "admin/base.html" %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Analytics</h1>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white">
+                <h5 class="mb-0 pt-2">Revenue by Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-4" style="height: 300px;">
+                    <canvas id="revenueChart"></canvas>
+                </div>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Order Count</th>
+                                <th>Revenue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for status, data in status_breakdown.items() %}
+                            <tr>
+                                <td>{{ status|replace('_', ' ')|title }}</td>
+                                <td>{{ data.count }}</td>
+                                <td>₹{{ data.revenue }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-body text-center">
+                <h6 class="text-muted">Last 7 Days Revenue</h6>
+                <h3>₹{{ recent_revenue }}</h3>
+                <p class="text-muted small mb-0">From {{ recent_orders_count }} orders</p>
+            </div>
+        </div>
+        <div class="card shadow-sm border-0">
+            <div class="card-body text-center">
+                <h6 class="text-muted">Catalog Overview</h6>
+                <p class="mb-1"><strong>{{ active_products }}</strong> Active Custom Products</p>
+                <p class="mb-1"><strong>{{ total_products }}</strong> Total Custom Products</p>
+                <p class="mb-0"><strong>{{ registered_users }}</strong> Registered Users</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script id="status-data" type="application/json">
+    {{ status_breakdown | tojson | safe }}
+</script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const ctx = document.getElementById('revenueChart').getContext('2d');
+        
+        const statusBreakdown = JSON.parse(document.getElementById('status-data').textContent);
+        const labels = [];
+        const chartData = [];
+        
+        for (const [status, data] of Object.entries(statusBreakdown)) {
+            labels.push(status.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase()));
+            chartData.push(data.revenue);
+        }
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Revenue (₹)',
+                    data: chartData,
+                    backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    });
+</script>
+{% endblock %}

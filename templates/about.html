@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}About {{ site_name }}{% endblock %}
+{% block body_class %}about-page{% endblock %}
+
+{% block content %}
+<section class="page-hero">
+    <div class="container-xxl">
+        <div class="page-hero__shell reveal-up">
+            <div class="page-hero__copy">
+                <span class="section-kicker">Our story</span>
+                <h1>About {{ site_name }}</h1>
+                <p>
+                    {{ site_name }} is built to make online shopping simple, premium, and trustworthy.
+                    We combine curated products, smart recommendations, secure checkout, and reliable support in one storefront.
+                </p>
+            </div>
+            <div class="page-hero__meta">
+                <span class="page-meta-pill">{{ catalog_stats.family_count }} families</span>
+                <span class="page-meta-pill">{{ catalog_stats.product_count }} products</span>
+                <span class="page-meta-pill">{{ catalog_stats.category_count }} categories</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-shell">
+    <div class="container-xxl">
+        <div class="checkout-layout">
+            <article class="success-card reveal-up">
+                <span class="success-badge"><i class="bi bi-stars"></i> What we focus on</span>
+                <h1>Shopping that feels smooth from browse to delivery</h1>
+                <p class="helper-note">
+                    We designed {{ site_name }} to keep the full journey consistent: discover products quickly,
+                    check out safely, track your order live, and get help fast when needed.
+                </p>
+
+                <div class="success-meta-grid">
+                    <article class="detail-meta-card">
+                        <span class="detail-meta-card__label">Checkout</span>
+                        <strong>Stripe card payments + flexible methods</strong>
+                    </article>
+                    <article class="detail-meta-card">
+                        <span class="detail-meta-card__label">Tracking</span>
+                        <strong>Timeline-based order progress updates</strong>
+                    </article>
+                    <article class="detail-meta-card">
+                        <span class="detail-meta-card__label">Support</span>
+                        <strong>Ticket-based customer support flow</strong>
+                    </article>
+                    <article class="detail-meta-card">
+                        <span class="detail-meta-card__label">Recommendations</span>
+                        <strong>Content and collaborative AI models</strong>
+                    </article>
+                </div>
+
+                <div class="success-actions mt-4">
+                    <a href="{{ url_for('index') }}" class="btn btn-primary">Browse products</a>
+                    <a href="{{ url_for('track_order_lookup') }}" class="btn btn-outline-primary">Track an order</a>
+                    <a href="{{ url_for('support') }}" class="btn btn-outline-secondary">Contact support</a>
+                </div>
+            </article>
+
+            <aside class="order-summary-card reveal-up">
+                <span class="section-kicker">Trust and quality</span>
+                <h2>Why customers choose us</h2>
+                <div class="summary-list">
+                    <div class="summary-row">
+                        <span>Secure card processing</span>
+                        <span><i class="bi bi-shield-lock"></i></span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Order confirmation emails</span>
+                        <span><i class="bi bi-envelope-check"></i></span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Live tracking access</span>
+                        <span><i class="bi bi-truck"></i></span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Support ticket IDs</span>
+                        <span><i class="bi bi-headset"></i></span>
+                    </div>
+                    <div class="summary-row summary-row--highlight">
+                        <span>Built for reliability</span>
+                        <span>24x7 storefront</span>
+                    </div>
+                </div>
+
+                <div class="checkout-section mt-3">
+                    <span class="section-kicker">Technology stack</span>
+                    <p class="helper-note">
+                        Flask, SQLAlchemy, Bootstrap, scikit-learn, and Stripe power the core shopping experience.
+                    </p>
+                </div>
+            </aside>
+        </div>
+    </div>
+</section>
+
+<section class="section-shell section-shell--tinted">
+    <div class="container-xxl">
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">How it works</span>
+                <h2 class="section-title">From discovery to doorstep</h2>
+            </div>
+        </div>
+
+        <div class="service-grid">
+            <article class="service-card reveal-up">
+                <span class="category-card__icon"><i class="bi bi-grid"></i></span>
+                <h3>Discover</h3>
+                <p>Explore curated categories, variant-rich product families, and recommendation-led suggestions.</p>
+            </article>
+            <article class="service-card reveal-up">
+                <span class="category-card__icon"><i class="bi bi-credit-card-2-front"></i></span>
+                <h3>Checkout</h3>
+                <p>Pay by Stripe card checkout or alternate payment methods with clear order confirmation.</p>
+            </article>
+            <article class="service-card reveal-up">
+                <span class="category-card__icon"><i class="bi bi-geo-alt"></i></span>
+                <h3>Track and support</h3>
+                <p>Track using your tracking ID and raise support tickets anytime for quick assistance.</p>
+            </article>
+        </div>
+    </div>
+</section>
+{% endblock %}

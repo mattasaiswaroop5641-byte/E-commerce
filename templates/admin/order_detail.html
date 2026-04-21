@@ -1,0 +1,81 @@
+{% extends "admin/base.html" %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Order: {{ order.id }}</h1>
+    <a href="{{ url_for('admin_orders') }}" class="btn btn-outline-secondary">Back to Orders</a>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mb-4">
+        <div class="admin-card card mb-4">
+            <div class="card-header bg-transparent border-bottom pt-3 pb-2">
+                <h5 class="mb-0">Order Items</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table mb-0">
+                    <tbody>
+                        {% for item in order['items'] %}
+                        <tr>
+                            <td>{{ item.quantity }}x</td>
+                            <td>{{ item.full_name }}</td>
+                            <td class="text-end">{{ item.price_display }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="border-top">
+                        <tr><th colspan="2" class="text-end">Total:</th><th class="text-end">{{ order.summary.total_display }}</th></tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+        <div class="admin-card card">
+            <div class="card-body">
+                <h5 class="card-title">Customer Details</h5>
+                <p class="mb-1"><strong>Name:</strong> {{ order.customer.full_name }}</p>
+                <p class="mb-1"><strong>Email:</strong> <a href="mailto:{{ order.customer.email }}" class="text-info text-decoration-none">{{ order.customer.email }}</a></p>
+                <p class="mb-1"><strong>Phone:</strong> {{ order.customer.phone or 'Not provided' }}</p>
+                <p class="mb-0"><strong>Shipping Address:</strong><br>{{ order.customer.address }}<br>{{ order.customer.city }}, {{ order.customer.postal_code }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="admin-card card mb-4">
+            <div class="card-header bg-transparent border-bottom pt-3 pb-2"><h5 class="mb-0">Update Status</h5></div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">{{ form.status.label(class="form-label") }}{{ form.status(class="form-select") }}</div>
+                    <div class="mb-3">{{ form.delivery_agent_id.label(class="form-label") }}{{ form.delivery_agent_id(class="form-select") }}</div>
+                    <div class="mb-3">{{ form.note.label(class="form-label") }}{{ form.note(class="form-control", rows="2") }}</div>
+                    {{ form.submit(class="btn btn-light w-100") }}
+                </form>
+            </div>
+        </div>
+        <div class="admin-card card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Payment</h5>
+                <p class="mb-1"><strong>Method:</strong> {{ order.payment_method }}</p>
+                <p class="mb-1"><strong>Status:</strong> <span class="badge {{ 'bg-success' if 'Paid' in order.payment_status or 'confirmed' in order.payment_status|lower else 'bg-warning text-dark' }}">{{ order.payment_status }}</span></p>
+                <p class="mb-1"><strong>Gateway:</strong> <span class="text-capitalize">{{ order.payment_gateway }}</span></p>
+                {% if order.payment_reference %}
+                <p class="mb-0"><strong>Reference:</strong> <br><code class="text-break">{{ order.payment_reference }}</code></p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="admin-card card">
+            <div class="card-body">
+                <h5 class="card-title">Shipping & Tracking</h5>
+                <p class="mb-1"><strong>Placed:</strong> {{ order.placed_at }}</p>
+                <p class="mb-1"><strong>ETA:</strong> {{ order.eta }}</p>
+                <p class="mb-0"><strong>Tracking:</strong> <a href="{{ order.tracking_url }}" target="_blank" class="text-info text-decoration-none">{{ order.tracking_number }}</a></p>
+                {% if order.summary.get('delivery_rating') %}
+                <hr class="border-secondary">
+                <p class="mb-1"><strong>Delivery Rating:</strong> {{ order.summary.delivery_rating }}/5</p>
+                {% if order.summary.delivery_feedback %}<p class="mb-b-0 text-success small fw-bold"><i class="bi-cash-coin"></i> Tip: ₹{{ order.summary.delivery_tip }}</p>{% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

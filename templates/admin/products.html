@@ -1,0 +1,41 @@
+{% extends "admin/base.html" %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Custom Products</h1>
+    <a href="{{ url_for('admin_product_new') }}" class="btn btn-dark">Add New Product</a>
+</div>
+
+<div class="admin-card card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Family ID</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in products %}
+                    <tr>
+                        <td>{{ product.product_id }}</td>
+                        <td>{{ product.name }}</td>
+                        <td><code>{{ product.product_family_id }}</code></td>
+                        <td>₹{{ "%.2f"|format(product.price) }}</td>
+                        <td><span class="badge {{ 'bg-success' if product.active else 'bg-danger' }}">{{ 'Active' if product.active else 'Draft' }}</span></td>
+                        <td><a href="{{ url_for('admin_product_edit', product_id=product.product_id) }}" class="btn btn-sm btn-outline-light py-0">Edit</a></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="text-center py-4">No custom products found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

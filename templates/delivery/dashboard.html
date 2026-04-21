@@ -1,0 +1,79 @@
+{% extends "delivery/base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="h3 mb-0">Active Deliveries</h2>
+    {% if agent %}
+    <form action="{{ url_for('delivery_toggle_status') }}" method="POST" class="m-0">
+        <button type="submit" class="btn {{ 'btn-success' if agent.active else 'btn-secondary' }} btn-sm fw-bold shadow-sm">
+            <i class="bi {{ 'bi-check-circle' if agent.active else 'bi-pause-circle' }} me-1"></i> {{ 'On Duty' if agent.active else 'Off Duty' }}
+        </button>
+    </form>
+    {% endif %}
+</div>
+<div class="row mb-4">
+    <div class="col-md-6 mb-3 mb-md-0">
+        <div class="card border-0 shadow-sm bg-primary text-white h-100">
+            <div class="card-body d-flex align-items-center justify-content-between p-4">
+                <div>
+                    <h6 class="text-white-50 mb-1 fw-bold text-uppercase">Delivered Today</h6>
+                    <h2 class="mb-0 display-5 fw-bold">{{ delivered_today }}</h2>
+                </div>
+                <i class="bi bi-box-seam-fill display-4 text-white-50"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body d-flex align-items-center justify-content-between p-4">
+                <div>
+                    <h6 class="text-muted mb-1 fw-bold text-uppercase">Pending Deliveries</h6>
+                    <h2 class="mb-0 display-5 fw-bold text-dark">{{ active_orders|length }}</h2>
+                </div>
+                <i class="bi bi-truck display-4 text-primary opacity-50"></i>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card border-0 shadow-sm">
+            <div class="list-group list-group-flush">
+                {% for order in active_orders %}
+                <a href="{{ url_for('delivery_order_detail', order_id=order.order_id) }}" class="list-group-item list-group-item-action p-3">
+                    <div class="d-flex w-100 justify-content-between align-items-center mb-1">
+                        <h6 class="mb-0 fw-bold">{{ order.order_id }}</h6>
+                        <small class="badge {{ 'bg-warning text-dark' if order.status == 'processing' else 'bg-primary' if order.status == 'shipped' else 'bg-info text-dark' }}">{{ order.status|replace('_', ' ')|title }}</small>
+                    </div>
+                    <p class="mb-1 text-muted small"><i class="bi-geo-alt me-1"></i> {{ order.customer_address }}, {{ order.customer_city }}</p>
+                    <small class="text-muted"><i class="bi-person me-1"></i> {{ order.customer_name }}</small>
+                </a>
+                {% else %}
+                <div class="p-4 text-center text-muted">No active orders waiting for delivery.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+<h3 class="h5 mb-3 mt-4">Recently Delivered</h3>
+<div class="card border-0 shadow-sm">
+    <div class="list-group list-group-flush">
+        {% for order in recent_delivered %}
+        <a href="{{ url_for('delivery_order_detail', order_id=order.order_id) }}" class="list-group-item list-group-item-action p-3">
+            <div class="d-flex w-100 justify-content-between align-items-center mb-1">
+                <h6 class="mb-0">{{ order.order_id }}</h6><small class="badge bg-success">Delivered</small>
+            </div>
+            <small class="text-muted">{{ order.customer_name }}</small>
+        </a>
+        {% else %}
+        <div class="p-4 text-center text-muted">No recent deliveries.</div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    // Auto-refresh the dashboard every 30 seconds to stay in sync with real-time assignments
+    setTimeout(function() {
+        window.location.reload();
+    }, 30000);
+</script>
+{% endblock %}

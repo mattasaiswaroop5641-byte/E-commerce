@@ -1,0 +1,49 @@
+{% extends "admin/base.html" %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Ticket: {{ ticket.ticket_id }}</h1>
+    <a href="{{ url_for('admin_tickets') }}" class="btn btn-outline-secondary">Back to Tickets</a>
+</div>
+<div class="row">
+    <div class="col-md-8 mb-4">
+        <div class="admin-card card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">{{ ticket.subject }}</h5>
+                <h6 class="card-subtitle mb-3 text-muted">From: {{ ticket.customer_name }} ({{ ticket.customer_email }})</h6>
+                <hr>
+                <p style="white-space: pre-wrap;">{{ ticket.message }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="admin-card card mb-4">
+            <div class="card-header bg-transparent border-bottom pt-3 pb-2"><h5 class="mb-0">Update Status</h5></div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        {{ form.status.label(class="form-label") }}
+                        {{ form.status(class="form-select") }}
+                    </div>
+                    <div class="mb-3">
+                        {{ form.note.label(class="form-label") }}
+                        {{ form.note(class="form-control", rows="2") }}
+                    </div>
+                    {{ form.submit(class="btn btn-light w-100") }}
+                </form>
+            </div>
+        </div>
+        {% if linked_order %}
+        <div class="admin-card card">
+            <div class="card-header bg-transparent border-bottom pt-3 pb-2"><h5 class="mb-0">Linked Order</h5></div>
+            <div class="card-body">
+                <p class="mb-1"><strong>ID:</strong> <a href="{{ url_for('admin_order_detail', order_id=linked_order.order_id) }}">{{ linked_order.order_id }}</a></p>
+                <p class="mb-1"><strong>Status:</strong> {{ linked_order.status|title }}</p>
+                <p class="mb-0"><strong>Tracking:</strong> {{ linked_order.tracking_number }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

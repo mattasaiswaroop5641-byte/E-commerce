@@ -1,0 +1,90 @@
+{% extends "admin/base.html" %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Dashboard</h1>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 text-center">
+            <div class="card-body">
+                <h6 class="text-muted">Total Orders</h6>
+                <h3 class="mb-0">{{ total_orders }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 text-center">
+            <div class="card-body">
+                <h6 class="text-muted">Total Revenue</h6>
+                <h3 class="mb-0">₹{{ total_revenue }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 text-center">
+            <div class="card-body">
+                <h6 class="text-muted">Delivered</h6>
+                <h3 class="mb-0">{{ delivered_orders }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 text-center">
+            <div class="card-body">
+                <h6 class="text-muted">Open Tickets</h6>
+                <h3 class="mb-0">{{ open_tickets_count }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <h4>Recent Orders</h4>
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in recent_orders %}
+                            <tr>
+                                <td><a href="{{ url_for('admin_order_detail', order_id=order.order_id) }}">{{ order.order_id }}</a></td>
+                                <td><span class="badge bg-{{ 'success' if order.status == 'delivered' else 'primary' }}">{{ order.status }}</span></td>
+                                <td>{{ order.created_at.strftime('%Y-%m-%d') }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="3" class="text-center py-3">No orders found.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer bg-white text-end">
+                <a href="{{ url_for('admin_orders') }}" class="btn btn-sm btn-outline-secondary">View All Orders</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-4">
+        <h4>Quick Actions</h4>
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('admin_product_new') }}" class="btn btn-dark"><i class="bi-plus-circle me-2"></i>Add New Product</a>
+                    <a href="{{ url_for('admin_discounts') }}" class="btn btn-outline-dark"><i class="bi-tag me-2"></i>Manage Discounts</a>
+                    <a href="{{ url_for('admin_tickets') }}" class="btn btn-outline-dark"><i class="bi-ticket me-2"></i>View Support Tickets</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

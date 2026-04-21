@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% from "_product_macros.html" import product_card, render_stars with context %}
+
+{% block title %}{{ product.full_name }} | {{ site_name }}{% endblock %}
+{% block body_class %}product-page{% endblock %}
+
+{% block content %}
+<section class="page-hero page-hero--compact">
+    <div class="container-xxl">
+        <div class="breadcrumb-strip reveal-up">
+            <a href="{{ url_for('index') }}">Home</a>
+            <span>/</span>
+            <a href="{{ url_for('category_products', category_slug=product.category_slug) }}">{{ product.category }}</a>
+            <span>/</span>
+            <span>{{ product.name }}</span>
+        </div>
+    </div>
+</section>
+
+<section class="section-shell">
+    <div class="container-xxl">
+        <div class="detail-shell reveal-up">
+            <div class="detail-media">
+                <div class="detail-media__frame">
+                    <img src="{{ product.hero_image }}"
+                         class="product-detail-image"
+                         alt="{{ product.full_name }}"
+                         width="920"
+                         height="920"
+                         decoding="async"
+                         data-fallback-src="{{ product.hero_image_fallback if product.hero_image_fallback is defined else '' }}"
+                         data-placeholder-src="{{ placeholder_image }}"
+                         onerror="window.handleImageFallback(this);">
+                    <div class="detail-badge-strip">
+                        <span class="product-badge">{{ product.badge }}</span>
+                        <span class="product-badge product-badge--accent">{{ product.discount_percent }}% off</span>
+                        {% if product.variant_count > 1 %}
+                            <span class="product-badge">{{ product.variant_count }} variants</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="detail-copy">
+                <span class="section-kicker">{{ product.category }}{% if product.subcategory %} <span aria-hidden="true">&bull;</span> {{ product.subcategory }}{% endif %}</span>
+                <h1>{{ product.name }}</h1>
+                {% if product.variant_label %}
+                    <p class="detail-variant-current">{{ product.variant_label }}</p>
+                {% endif %}
+                {{ render_stars(product) }}
+                <div class="detail-price-row">
+                    <span class="detail-price">{{ product.price_display }}</span>
+                    <span class="detail-price detail-price--old">{{ product.original_price_display }}</span>
+                    <span class="detail-price detail-price--savings">Save {{ product.discount_percent }}%</span>
+                </div>
+                <p class="detail-description">{{ product.description }}</p>
+
+                {% if variant_options %}
+                    <div class="variant-selector">
+                        <div class="variant-selector__header">
+                            <span class="detail-meta-card__label">{{ product.variant_type or 'Options' }}</span>
+                            <strong>Selected: {{ product.variant_label }}</strong>
+                        </div>
+                        <div class="variant-chip-row">
+                            {% for variant in variant_options %}
+                                <a href="{{ url_for('product', product_id=variant.product_id) }}"
+                                   class="variant-chip {% if variant.is_active %}is-active{% endif %}"
+                                   {% if variant.is_active %}aria-current="page"{% endif %}>
+                                    <span>{{ variant.label }}</span>
+                                    <small>{{ variant.price_display }}</small>
+                                </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <div class="detail-utility-row">
+                    <span><i class="bi bi-truck"></i> {{ product.delivery_text }}</span>
+                    <span><i class="bi bi-patch-check"></i> 7-day easy return</span>
+                    <span><i class="bi bi-shield-lock"></i> Secure checkout</span>
+                </div>
+
+                <div class="detail-actions">
+                    <form action="{{ url_for('add_to_cart', product_id=product.product_id) }}" method="post">
+                        <input type="hidden" name="next" value="{{ request.path }}">
+                        <button class="btn btn-dark btn-lg" type="submit">
+                            <i class="bi bi-cart-plus"></i> Add to cart
+                        </button>
+                    </form>
+                    <form action="{{ url_for('buy_now', product_id=product.product_id) }}" method="post">
+                        <button class="btn btn-primary btn-lg" type="submit">Buy now</button>
+                    </form>
+                    {% if current_user.is_authenticated %}
+                        <button class="btn btn-outline-primary btn-lg" type="button" data-interact-product-id="{{ product.product_id }}">
+                            <i class="bi bi-heart"></i> Save
+                        </button>
+                    {% endif %}
+                </div>
+
+                <div class="detail-meta-grid">
+                    <article class="detail-meta-card">
+                        <span class="detail-meta-card__label">Brand</span>
+                        <strong>{{ product.brand }}</strong>
+                    </article>
+                    <article class="detail-meta-card">
+                        <span class="detail-meta-card__label">Category</span>
+                        <strong>{{ product.category }}</strong>
+                    </article>
+                    <article class="detail-meta-card">
+                        <span class="detail-meta-card__label">Selected option</span>
+                        <strong>{{ product.variant_label or 'Standard' }}</strong>
+                    </article>
+                    <article class="detail-meta-card">
+                        <span class="detail-meta-card__label">Payment methods</span>
+                        <strong>Card, UPI, Net Banking, COD</strong>
+                    </article>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-shell section-shell--tinted">
+    <div class="container-xxl">
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">You may also like</span>
+                <h2 class="section-title">More from the same discovery lane</h2>
+            </div>
+        </div>
+        <div class="product-strip">
+            {% for similar_product in similar_products %}
+                {{ product_card(similar_product) }}
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endblock %}

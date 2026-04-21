@@ -1,0 +1,98 @@
+{% extends "delivery/base.html" %}
+{% block content %}
+<div class="mb-3 d-flex justify-content-between align-items-center">
+    <a href="{{ url_for('delivery_dashboard') }}" class="text-decoration-none"><i class="bi-arrow-left"></i> Back to Dashboard</a>
+    <form action="{{ url_for('delivery_unassign', order_id=order.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to unassign yourself from this order? It will be sent back to the queue.');" class="m-0">
+        <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi-person-x me-1"></i> Unassign Order</button>
+    </form>
+</div>
+<div class="row">
+    <div class="col-md-7 mb-4">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white py-3"><h5 class="mb-0 fw-bold">Order {{ order.id }}</h5></div>
+            <div class="card-body">
+                <p class="mb-1"><i class="bi-person me-2 text-muted"></i> <strong>{{ order.customer.full_name }}</strong></p>
+                <p class="mb-1"><i class="bi-telephone me-2 text-muted"></i> <a href="tel:{{ order.customer.phone }}" class="text-decoration-none">{{ order.customer.phone }}</a></p>
+                <hr>
+                <p class="mb-1"><i class="bi-geo-alt me-2 text-muted"></i> <strong>Shipping Address:</strong></p>
+                <p class="mb-0 ms-4">{{ order.customer.address }}<br>{{ order.customer.city }}, {{ order.customer.postal_code }}</p>
+                <div class="ms-4 mt-2">
+                    <a href="https://www.google.com/maps/search/?api=1&query={{ order.customer.address|urlencode }},+{{ order.customer.city|urlencode }},+{{ order.customer.postal_code|urlencode }}" target="_blank" class="btn btn-sm btn-primary"><i class="bi-cursor-fill me-1"></i> Open Navigation App</a>
+                </div>
+                <div class="mt-4">
+                    <iframe width="100%" height="250" style="border:0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" loading="lazy" allowfullscreen referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q={{ (order.customer.address ~ ' ' ~ order.customer.city ~ ' ' ~ order.customer.postal_code)|urlencode }}&t=&z=14&ie=UTF8&iwloc=&output=embed"></iframe>
+                </div>
+            </div>
+        </div>
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white py-3"><h6 class="mb-0">Package Contents</h6></div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for item in order['items'] %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center"><span>{{ item.quantity }}x {{ item.full_name }}</span></li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="card-footer bg-light text-end">
+                <strong>Payment:</strong> {{ order.payment_method }} ({{ order.payment_status }})
+            </div>
+        </div>
+    </div>
+    <div class="col-md-5">
+        <div class="card border-0 shadow-sm border-primary">
+            <div class="card-header bg-primary text-white py-3"><h5 class="mb-0">Update Status</h5></div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        {{ form.status.label(class="form-label fw-bold") }}
+                        {{ form.status(class="form-select form-select-lg") }}
+                        <div id="out-for-delivery-msg" class="alert alert-warning small py-2 mt-2" style="display: none;">
+                            <i class="bi-envelope me-1"></i> Changing to <strong>Out for Delivery</strong> will email the customer your contact details and their 4-digit Delivery OTP.
+                        </div>
+                    </div>
+                    <div class="mb-3" id="otp-container" style="display: none;">
+                        {{ form.delivery_otp.label(class="form-label fw-bold text-primary") }}
+                        {{ form.delivery_otp(class="form-control form-control-lg", placeholder="Ask customer for 4-digit OTP") }}
+                    </div>
+                    <div class="mb-3">
+                        {{ form.note.label(class="form-label text-muted") }}
+                        {{ form.note(class="form-control", rows="3", placeholder="Optional delivery notes, e.g. Left at front door") }}
+                    </div>
+                    <div class="alert alert-info small py-2"><i class="bi-envelope-check me-1"></i> Status updates to Shipped, Canceled, or Delivered will automatically email the customer.</div>
+                    {{ form.submit(class="btn btn-primary btn-lg w-100") }}
+                </form>
+                {% if order.summary.get('delivery_rating') %}
+                <hr>
+                <div class="text-center">
+                    <h6 class="text-muted mb-1">Customer Rating</h6>
+                    <div class="text-warning mb-1">
+                        {% for _ in range(order.summary.delivery_rating) %}<i class="bi-star-fill"></i>{% endfor %}
+                    </div>
+                    {% if order.summary.get('delivery_tip') %}<span class="badge bg-success"><i class="bi-cash-coin me-1"></i>₹{{ order.summary.delivery_tip }} Tip Earned!</span>{% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const statusSelect = document.getElementById('status');
+        const otpContainer = document.getElementById('otp-container');
+        const msgContainer = document.getElementById('out-for-delivery-msg');
+        
+        function toggleFields() {
+            if (statusSelect) {
+                const status = statusSelect.value;
+                otpContainer.style.display = (status === 'delivered') ? 'block' : 'none';
+                msgContainer.style.display = (status === 'out_for_delivery') ? 'block' : 'none';
+            }
+        }
+        
+        if(statusSelect) { statusSelect.addEventListener('change', toggleFields); }
+        toggleFields(); // Initial load
+    });
+</script>
+{% endblock %}
