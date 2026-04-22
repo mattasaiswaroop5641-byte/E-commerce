@@ -806,6 +806,12 @@ h3,
     overflow: hidden;
     min-height: 100%;
     border-radius: var(--radius-lg);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.product-card:hover {
+    transform: translateY(-8px);
+    box-shadow: var(--shadow-md);
 }
 
 .product-media {

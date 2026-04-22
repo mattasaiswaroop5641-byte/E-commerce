@@ -206,6 +206,12 @@ function initializeNavbarState() {
 }
 
 function initializeRevealAnimations() {
+    // Automatically add reveal animations to product strip items with a stagger effect
+    document.querySelectorAll(".product-strip > *").forEach((item, index) => {
+        item.classList.add("reveal-up");
+        item.style.transitionDelay = `${(index % 4) * 0.1}s`; // Stagger up to 4 items
+    });
+
     const items = document.querySelectorAll(".reveal-up");
     if (!items.length || !("IntersectionObserver" in window)) {
         items.forEach((item) => item.classList.add("in-view"));

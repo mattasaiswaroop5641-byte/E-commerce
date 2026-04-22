@@ -7,6 +7,22 @@
 </div>
 
 <div class="row">
+    {% if order.order_status == 'pending_payment' %}
+    <div class="col-12">
+        <div class="alert alert-warning d-flex justify-content-between align-items-center mb-4 shadow-sm">
+            <div>
+                <strong><i class="bi bi-hourglass-split"></i> Payment Verification Required</strong><br>
+                Customer paid via {{ order.payment_method }}. Reference: {{ order.payment_reference }}
+            </div>
+            <form action="{{ url_for('admin_verify_payment', order_id=order.id) }}" method="POST" class="m-0">
+                <button type="submit" class="btn btn-success fw-bold shadow-sm">
+                    <i class="bi bi-check-circle"></i> Verify Payment Now
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="col-md-8 mb-4">
         <div class="admin-card card mb-4">
             <div class="card-header bg-transparent border-bottom pt-3 pb-2">
@@ -72,7 +88,8 @@
                 {% if order.summary.get('delivery_rating') %}
                 <hr class="border-secondary">
                 <p class="mb-1"><strong>Delivery Rating:</strong> {{ order.summary.delivery_rating }}/5</p>
-                {% if order.summary.delivery_feedback %}<p class="mb-b-0 text-success small fw-bold"><i class="bi-cash-coin"></i> Tip: ₹{{ order.summary.delivery_tip }}</p>{% endif %}
+                {% if order.summary.delivery_feedback %}<p class="mb-1 text-muted">"{{ order.summary.delivery_feedback }}"</p>{% endif %}
+                {% if order.summary.get('delivery_tip') %}<p class="mb-0 text-success small fw-bold"><i class="bi-cash-coin"></i> Tip: ₹{{ order.summary.delivery_tip }}</p>{% endif %}
                 {% endif %}
             </div>
         </div>

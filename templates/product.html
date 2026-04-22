@@ -77,18 +77,18 @@
                 <div class="detail-utility-row">
                     <span><i class="bi bi-truck"></i> {{ product.delivery_text }}</span>
                     <span><i class="bi bi-patch-check"></i> 7-day easy return</span>
-                    <span><i class="bi bi-shield-lock"></i> Secure checkout</span>
+                    <span class="{% if not product.can_buy %}text-danger fw-bold{% elif 'Only' in product.stock_text %}text-warning fw-bold{% endif %}"><i class="bi bi-box-seam"></i> {{ product.stock_text }}</span>
                 </div>
 
                 <div class="detail-actions">
                     <form action="{{ url_for('add_to_cart', product_id=product.product_id) }}" method="post">
                         <input type="hidden" name="next" value="{{ request.path }}">
-                        <button class="btn btn-dark btn-lg" type="submit">
-                            <i class="bi bi-cart-plus"></i> Add to cart
+                        <button class="btn btn-dark btn-lg" type="submit" {% if not product.can_buy %}disabled{% endif %}>
+                            <i class="bi bi-cart-plus"></i> {% if not product.can_buy %}Out of stock{% else %}Add to cart{% endif %}
                         </button>
                     </form>
                     <form action="{{ url_for('buy_now', product_id=product.product_id) }}" method="post">
-                        <button class="btn btn-primary btn-lg" type="submit">Buy now</button>
+                        <button class="btn btn-primary btn-lg" type="submit" {% if not product.can_buy %}disabled{% endif %}>Buy now</button>
                     </form>
                     {% if current_user.is_authenticated %}
                         <button class="btn btn-outline-primary btn-lg" type="button" data-interact-product-id="{{ product.product_id }}">
@@ -114,6 +114,78 @@
                         <span class="detail-meta-card__label">Payment methods</span>
                         <strong>Card, UPI, Net Banking, COD</strong>
                     </article>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-shell">
+    <div class="container-xxl">
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">Customer Feedback</span>
+                <h2 class="section-title">Product Reviews</h2>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-8">
+                {% if reviews %}
+                    <div class="reviews-list">
+                    {% for review in reviews %}
+                        <div class="p-4 mb-3 border rounded-4 bg-white shadow-sm">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="stars text-warning">
+                                    {% for _ in range(review.rating) %}<i class="bi bi-star-fill"></i>{% endfor %}
+                                    {% for _ in range(5 - review.rating) %}<i class="bi bi-star"></i>{% endfor %}
+                                </div>
+                                <small class="text-muted">{{ review.created_at.strftime('%d %b %Y') }}</small>
+                            </div>
+                            <h5 class="mb-1">{{ review.title }}</h5>
+                            <p class="mb-2 text-muted">{{ review.comment }}</p>
+                            <small class="text-muted"><i class="bi bi-person-circle"></i> {{ review.customer_email.split('@')[0] }}***
+                            {% if review.verified_purchase %}<span class="text-success ms-2"><i class="bi bi-patch-check-fill"></i> Verified Purchase</span>{% endif %}</small>
+                        </div>
+                    {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="p-4 border rounded-4 bg-white text-center text-muted shadow-sm">
+                        <i class="bi bi-chat-square-text display-4 d-block mb-3 opacity-50"></i>
+                        <p>No reviews yet. Be the first to review this product!</p>
+                    </div>
+                {% endif %}
+            </div>
+            <div class="col-md-4 mt-4 mt-md-0">
+                <div class="p-4 border rounded-4 bg-light-subtle shadow-sm">
+                    <h4 class="h5 fw-bold mb-3">Write a Review</h4>
+                    {% if current_user.is_authenticated %}
+                    <form action="{{ url_for('add_product_review', product_id=product.product_id) }}" method="post">
+                        <div class="mb-3">
+                            <label class="form-label">Rating</label>
+                            <select name="rating" class="form-select" required>
+                                <option value="5">5 Stars - Excellent</option>
+                                <option value="4">4 Stars - Good</option>
+                                <option value="3">3 Stars - Average</option>
+                                <option value="2">2 Stars - Poor</option>
+                                <option value="1">1 Star - Terrible</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Review Title</label>
+                            <input type="text" name="title" class="form-control" required placeholder="Sum up your experience">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Review Comment</label>
+                            <textarea name="comment" class="form-control" rows="4" required placeholder="What did you like or dislike?"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-dark w-100">Submit Review</button>
+                    </form>
+                    {% else %}
+                    <div class="text-center py-3">
+                        <p class="mb-3">Sign in to write a review for this product.</p>
+                        <a href="{{ url_for('login', next=request.path) }}" class="btn btn-outline-dark w-100">Sign In</a>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

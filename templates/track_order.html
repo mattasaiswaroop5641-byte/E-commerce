@@ -162,4 +162,27 @@
         {% endif %}
     </div>
 </section>
+
+<script>
+    // Silently check for payment verification updates every 10 seconds
+    setInterval(function() {
+        fetch(window.location.href)
+            .then(response => response.text())
+            .then(html => {
+                const parser = new DOMParser();
+                const newDoc = parser.parseFromString(html, 'text/html');
+                const newTimeline = newDoc.querySelector('.tracking-timeline');
+                const currentTimeline = document.querySelector('.tracking-timeline');
+                
+                // If the timeline changed (e.g., Payment Pending -> Processing)
+                if (newTimeline && currentTimeline && newTimeline.innerHTML !== currentTimeline.innerHTML) {
+                    currentTimeline.innerHTML = newTimeline.innerHTML;
+                    const chime = new Audio('/static/audio/notification.mp3');
+                    chime.play().catch(e => console.log("Audio play blocked by browser until user interaction"));
+                    setTimeout(() => window.location.reload(), 1500);
+                }
+            })
+            .catch(err => console.error("Polling error:", err));
+    }, 10000);
+</script>
 {% endblock %}

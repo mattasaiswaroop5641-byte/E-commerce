@@ -78,6 +78,13 @@ class DeliverySignupForm(FlaskForm):
     password = PasswordField("Password", validators=[DataRequired(), Length(min=6)])
     submit = SubmitField("Register")
 
+class AgentProfileForm(FlaskForm):
+    name = StringField("Full Name", validators=[DataRequired(), Length(min=2, max=100)])
+    phone = StringField("Phone Number", validators=[DataRequired(), Length(min=10, max=20)])
+    email = StringField("Email Address", validators=[DataRequired(), Email(check_deliverability=False)])
+    profile_pic_url = StringField('Profile Picture URL', validators=[OptionalValidator(), Length(max=500)])
+    submit = SubmitField("Update Profile")
+
 class DeliveryStatusForm(FlaskForm):
     status = SelectField(
         "Update Status",
@@ -90,5 +97,6 @@ class DeliveryStatusForm(FlaskForm):
         validators=[DataRequired()],
     )
     delivery_otp = StringField("Customer OTP (Required to mark Delivered)", validators=[OptionalValidator(), Length(max=6)])
+    cod_paid_via_upi = BooleanField("Customer paid via UPI at door (COD only)")
     note = TextAreaField("Delivery Note", validators=[OptionalValidator(), Length(max=500)])
     submit = SubmitField("Update Status")
