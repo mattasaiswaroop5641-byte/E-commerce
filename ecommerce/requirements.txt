@@ -13,3 +13,4 @@ numpy
 Flask-WTF
 email_validator
 flask-cors
+psycopg2-binary
