@@ -1,121 +1,90 @@
 {% extends "admin/base.html" %}
-{% block title %}Dashboard · Admin · {{ site_name }}{% endblock %}
-{% block content %}
-<div class="row g-3 mb-3">
-    <div class="col-lg-6">
-        <div class="admin-card rounded p-3">
-            <div class="d-flex align-items-center justify-content-between">
-                <div>
-                    <div class="admin-muted small">Recent orders</div>
-                    <div class="h5 mb-0">Last 10</div>
-                </div>
-                <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_orders') }}">View all</a>
+
+{% block admin_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Dashboard</h1>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 text-center">
+            <div class="card-body">
+                <h6 class="text-muted">Total Orders</h6>
+                <h3 class="mb-0">{{ total_orders }}</h3>
             </div>
         </div>
     </div>
-    <div class="col-lg-6">
-        <div class="admin-card rounded p-3">
-            <div class="d-flex align-items-center justify-content-between">
-                <div>
-                    <div class="admin-muted small">Open tickets</div>
-                    <div class="h5 mb-0">Last 10</div>
-                </div>
-                <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_tickets') }}">View tickets</a>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 text-center">
+            <div class="card-body">
+                <h6 class="text-muted">Total Revenue</h6>
+                <h3 class="mb-0">₹{{ total_revenue }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 text-center">
+            <div class="card-body">
+                <h6 class="text-muted">Delivered</h6>
+                <h3 class="mb-0">{{ delivered_orders }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 text-center">
+            <div class="card-body">
+                <h6 class="text-muted">Open Tickets</h6>
+                <h3 class="mb-0">{{ open_tickets_count }}</h3>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row g-3">
-    <div class="col-xl-7">
-        <div class="admin-card rounded p-3">
-            <div class="d-flex align-items-center justify-content-between mb-2">
-                <div class="fw-semibold">Orders</div>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr>
-                            <th>Order</th>
-                            <th>Status</th>
-                            <th>Payment</th>
-                            <th class="text-end">Total</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for order in recent_orders %}
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <h4>Recent Orders</h4>
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
                             <tr>
-                                <td class="fw-semibold">{{ order.order_id }}</td>
-                                <td><span class="badge badge-soft">{{ order.status }}</span></td>
-                                <td class="admin-muted">{{ order.payment_status }}</td>
-                                <td class="text-end">{{ (order.summary_json or {}).get("total_display", "") }}</td>
-                                <td class="text-end">
-                                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_order_detail', order_id=order.order_id) }}">Open</a>
-                                </td>
+                                <th>Order ID</th>
+                                <th>Status</th>
+                                <th>Date</th>
                             </tr>
-                        {% else %}
-                            <tr><td colspan="5" class="admin-muted">No orders yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {% for order in recent_orders %}
+                            <tr>
+                                <td><a href="{{ url_for('admin_order_detail', order_id=order.order_id) }}">{{ order.order_id }}</a></td>
+                                <td><span class="badge bg-{{ 'success' if order.status == 'delivered' else 'primary' }}">{{ order.status }}</span></td>
+                                <td>{{ order.created_at.strftime('%Y-%m-%d') }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="3" class="text-center py-3">No orders found.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer bg-white text-end">
+                <a href="{{ url_for('admin_orders') }}" class="btn btn-sm btn-outline-secondary">View All Orders</a>
             </div>
         </div>
     </div>
 
-    <div class="col-xl-5">
-        <div class="admin-card rounded p-3 mb-3">
-            <div class="fw-semibold mb-2">Tickets</div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Status</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for ticket in open_tickets %}
-                            <tr>
-                                <td class="fw-semibold">{{ ticket.ticket_id }}</td>
-                                <td><span class="badge badge-soft">{{ ticket.status }}</span></td>
-                                <td class="text-end">
-                                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_ticket_detail', ticket_id=ticket.ticket_id) }}">Open</a>
-                                </td>
-                            </tr>
-                        {% else %}
-                            <tr><td colspan="3" class="admin-muted">No open tickets.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="admin-card rounded p-3">
-            <div class="fw-semibold mb-2">Audit</div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr>
-                            <th>Action</th>
-                            <th class="text-end">When</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for entry in audit %}
-                            <tr>
-                                <td class="fw-semibold">{{ entry.action }} <span class="admin-muted">· {{ entry.target_type }} {{ entry.target_id }}</span></td>
-                                <td class="text-end admin-muted">{{ entry.created_at }}</td>
-                            </tr>
-                        {% else %}
-                            <tr><td colspan="2" class="admin-muted">No audit entries yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+    <div class="col-md-6 mb-4">
+        <h4>Quick Actions</h4>
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('admin_product_new') }}" class="btn btn-dark"><i class="bi-plus-circle me-2"></i>Add New Product</a>
+                    <a href="{{ url_for('admin_discounts') }}" class="btn btn-outline-dark"><i class="bi-tag me-2"></i>Manage Discounts</a>
+                    <a href="{{ url_for('admin_tickets') }}" class="btn btn-outline-dark"><i class="bi-ticket me-2"></i>View Support Tickets</a>
+                </div>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
-

@@ -229,3 +229,20 @@ class CustomerProfile(db.Model):
         default=db.func.current_timestamp(),
         onupdate=db.func.current_timestamp(),
     )
+
+
+class DeliveryAgent(db.Model):
+    __allow_unmapped__ = True
+    id: int = db.Column(db.Integer, primary_key=True)
+    name: str = db.Column(db.String(100), nullable=False)
+    phone: str = db.Column(db.String(20), nullable=False)
+    email: str = db.Column(db.String(120), unique=True, nullable=False, index=True)
+    password_hash: str = db.Column(db.String(256), nullable=False)
+    active: bool = db.Column(db.Boolean, default=True, index=True)
+    created_at: datetime = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+    def set_password(self, password: str) -> None:
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password: str) -> bool:
+        return check_password_hash(self.password_hash, password)

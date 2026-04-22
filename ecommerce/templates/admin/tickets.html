@@ -1,41 +1,37 @@
 {% extends "admin/base.html" %}
-{% block title %}Tickets · Admin · {{ site_name }}{% endblock %}
-{% block content %}
-<div class="admin-card rounded p-3">
-    <div class="d-flex align-items-center justify-content-between mb-2">
-        <div class="fw-semibold">Support tickets</div>
-        <div class="admin-muted small">Latest 200</div>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Status</th>
-                    <th>Customer</th>
-                    <th>Subject</th>
-                    <th class="text-end">Created</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for ticket in tickets %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Support Tickets</h1>
+</div>
+<div class="admin-card card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
                     <tr>
-                        <td class="fw-semibold">{{ ticket.ticket_id }}</td>
-                        <td><span class="badge badge-soft">{{ ticket.status }}</span></td>
-                        <td class="admin-muted">{{ ticket.customer_email }}</td>
-                        <td class="admin-muted">{{ ticket.subject }}</td>
-                        <td class="text-end admin-muted">{{ ticket.created_at }}</td>
-                        <td class="text-end">
-                            <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_ticket_detail', ticket_id=ticket.ticket_id) }}">Open</a>
-                        </td>
+                        <th>Ticket ID</th>
+                        <th>Customer</th>
+                        <th>Subject</th>
+                        <th>Status</th>
+                        <th>Date</th>
                     </tr>
-                {% else %}
-                    <tr><td colspan="6" class="admin-muted">No tickets yet.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    {% for ticket in tickets %}
+                    <tr>
+                        <td><a href="{{ url_for('admin_ticket_detail', ticket_id=ticket.ticket_id) }}"><strong>{{ ticket.ticket_id }}</strong></a></td>
+                        <td>{{ ticket.customer_name }}</td>
+                        <td>{{ ticket.subject }}</td>
+                        <td><span class="badge {{ 'bg-success' if ticket.status == 'resolved' else 'bg-warning text-dark' if ticket.status == 'open' else 'bg-secondary' }}">{{ ticket.status|title }}</span></td>
+                        <td>{{ ticket.created_at.strftime('%Y-%m-%d') }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="text-center py-4">No support tickets found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endblock %}
-

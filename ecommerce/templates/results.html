@@ -68,16 +68,15 @@
                 {% if query %}
                     <input type="hidden" name="query" value="{{ query }}">
                 {% endif %}
-                {% if pagination and pagination.page > 1 %}
-                    <input type="hidden" name="page" value="{{ pagination.page }}">
-                {% endif %}
                 <label for="sort">Sort by</label>
-                <select id="sort" name="sort" class="form-select">
+            <select id="sort" name="sort" class="form-select" onchange="this.form.submit()">
                     {% for option in sort_options %}
                         <option value="{{ option.id }}" {% if selected_sort == option.id %}selected{% endif %}>{{ option.label }}</option>
                     {% endfor %}
                 </select>
+            <noscript>
                 <button class="btn btn-outline-secondary" type="submit">Apply</button>
+            </noscript>
             </form>
         </div>
 

@@ -83,6 +83,7 @@
                 {% if order.get('tracking_number') %}
                     <a href="{{ url_for('track_order', tracking_number=order.get('tracking_number')) }}" class="btn btn-outline-primary btn-lg">Track this order</a>
                     <a href="{{ url_for('support', order_id=order.get('id'), tracking_number=order.get('tracking_number')) }}" class="btn btn-outline-secondary btn-lg">Need help?</a>
+                    <a href="{{ url_for('invoice', order_id=order.get('id')) }}" target="_blank" class="btn btn-outline-dark btn-lg"><i class="bi-printer"></i> Print Invoice</a>
                 {% endif %}
                 <a href="{{ url_for('search') }}" class="btn btn-outline-secondary btn-lg">Browse full catalog</a>
             </div>

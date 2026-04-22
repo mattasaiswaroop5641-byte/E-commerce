@@ -1,58 +1,49 @@
 {% extends "admin/base.html" %}
-{% block title %}Ticket {{ ticket.ticket_id }} · Admin · {{ site_name }}{% endblock %}
-{% block content %}
-<div class="row g-3">
-    <div class="col-lg-8">
-        <div class="admin-card rounded p-3 mb-3">
-            <div class="d-flex align-items-center justify-content-between">
-                <div>
-                    <div class="admin-muted small">Ticket</div>
-                    <div class="h5 mb-0">{{ ticket.ticket_id }}</div>
-                    <div class="admin-muted">{{ ticket.customer_email }}</div>
-                </div>
-                <span class="badge badge-soft">{{ ticket.status }}</span>
-            </div>
-            <hr style="border-color: rgba(255,255,255,.10);">
-            <div class="fw-semibold">{{ ticket.subject }}</div>
-            <div class="admin-muted mt-2" style="white-space: pre-wrap;">{{ ticket.message }}</div>
-            <div class="admin-muted small mt-3">Created: {{ ticket.created_at }}</div>
-        </div>
 
-        <div class="admin-card rounded p-3">
-            <div class="fw-semibold mb-2">Linked order</div>
-            {% if linked_order %}
-                <div class="admin-muted">
-                    <div><strong class="text-light">{{ linked_order.order_id }}</strong> · {{ linked_order.payment_status }} · <span class="badge badge-soft">{{ linked_order.status }}</span></div>
-                    <div>Tracking: {{ linked_order.tracking_number }}</div>
-                    <div class="mt-2">
-                        <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_order_detail', order_id=linked_order.order_id) }}">Open order</a>
-                    </div>
-                </div>
-            {% else %}
-                <div class="admin-muted">No linked order found.</div>
-            {% endif %}
+{% block admin_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Ticket: {{ ticket.ticket_id }}</h1>
+    <a href="{{ url_for('admin_tickets') }}" class="btn btn-outline-secondary">Back to Tickets</a>
+</div>
+<div class="row">
+    <div class="col-md-8 mb-4">
+        <div class="admin-card card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">{{ ticket.subject }}</h5>
+                <h6 class="card-subtitle mb-3 text-muted">From: {{ ticket.customer_name }} ({{ ticket.customer_email }})</h6>
+                <hr>
+                <p style="white-space: pre-wrap;">{{ ticket.message }}</p>
+            </div>
         </div>
     </div>
-
-    <div class="col-lg-4">
-        <div class="admin-card rounded p-3">
-            <div class="fw-semibold mb-2">Update ticket</div>
-            <form method="post">
-                {{ form.hidden_tag() }}
-                <div class="mb-2">
-                    {{ form.status.label(class="form-label admin-muted") }}
-                    {{ form.status(class="form-select") }}
-                </div>
-                <div class="mb-2">
-                    {{ form.note.label(class="form-label admin-muted") }}
-                    {{ form.note(class="form-control", rows="3", placeholder="Optional internal note") }}
-                </div>
-                <div class="d-grid">
-                    <button class="btn btn-light" type="submit">Save</button>
-                </div>
-            </form>
+    <div class="col-md-4">
+        <div class="admin-card card mb-4">
+            <div class="card-header bg-transparent border-bottom pt-3 pb-2"><h5 class="mb-0">Update Status</h5></div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        {{ form.status.label(class="form-label") }}
+                        {{ form.status(class="form-select") }}
+                    </div>
+                    <div class="mb-3">
+                        {{ form.note.label(class="form-label") }}
+                        {{ form.note(class="form-control", rows="2") }}
+                    </div>
+                    {{ form.submit(class="btn btn-light w-100") }}
+                </form>
+            </div>
         </div>
+        {% if linked_order %}
+        <div class="admin-card card">
+            <div class="card-header bg-transparent border-bottom pt-3 pb-2"><h5 class="mb-0">Linked Order</h5></div>
+            <div class="card-body">
+                <p class="mb-1"><strong>ID:</strong> <a href="{{ url_for('admin_order_detail', order_id=linked_order.order_id) }}">{{ linked_order.order_id }}</a></p>
+                <p class="mb-1"><strong>Status:</strong> {{ linked_order.status|title }}</p>
+                <p class="mb-0"><strong>Tracking:</strong> {{ linked_order.tracking_number }}</p>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
-

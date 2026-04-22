@@ -78,8 +78,14 @@
 
                     <div class="payment-detail-panels">
                         <div class="payment-detail" data-payment-detail="upi">
-                            <label class="form-label" for="upi_id">UPI ID / Wallet handle</label>
-                            <input class="form-control form-control-lg" id="upi_id" name="upi_id" value="{{ form_data.get('upi_id', '') }}" placeholder="example@upi">
+                            <div class="p-3 rounded-3 border bg-light-subtle text-center mb-3">
+                                <p class="mb-2"><strong>Scan to Pay</strong></p>
+                                <!-- Save your actual QR code as 'upi-qr.jpg' in the static/images folder -->
+                                <img src="{{ url_for('static', filename='images/upi-qr.jpg') }}" alt="UPI QR Code" class="img-fluid border rounded mb-2 bg-white p-2" style="max-width: 200px; height: auto;" onerror="this.src='https://via.placeholder.com/200x200.png?text=Your+QR+Code+Here'">
+                                <p class="mb-0 text-muted small">Scan this code with any UPI app (GPay, PhonePe, Paytm, etc.) to transfer the total amount.</p>
+                            </div>
+                            <label class="form-label" for="upi_id">Verify your payment (Enter your UPI ID)</label>
+                            <input class="form-control form-control-lg" id="upi_id" name="upi_id" value="{{ form_data.get('upi_id', '') }}" placeholder="e.g. 9876543210@ybl">
                         </div>
 
                         <div class="payment-detail" data-payment-detail="card">

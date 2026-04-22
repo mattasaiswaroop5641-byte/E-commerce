@@ -1,51 +1,41 @@
 {% extends "admin/base.html" %}
-{% block title %}Products · Admin · {{ site_name }}{% endblock %}
-{% block content %}
-<div class="admin-card rounded p-3">
-    <div class="d-flex align-items-center justify-content-between mb-2">
-        <div class="fw-semibold">Admin products (DB)</div>
-        <div class="d-flex align-items-center gap-2">
-            <span class="admin-muted small">These are appended to the CSV catalog at runtime.</span>
-            <a class="btn btn-sm btn-light" href="{{ url_for('admin_product_new') }}"><i class="bi bi-plus-circle"></i> Add</a>
-        </div>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Family</th>
-                    <th>Category</th>
-                    <th class="text-end">Price</th>
-                    <th>Status</th>
-                    <th class="text-end">Updated</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for product in products %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Custom Products</h1>
+    <a href="{{ url_for('admin_product_new') }}" class="btn btn-dark">Add New Product</a>
+</div>
+
+<div class="admin-card card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
                     <tr>
-                        <td class="fw-semibold">{{ product.product_id }}</td>
-                        <td class="admin-muted">{{ product.name }}</td>
-                        <td class="admin-muted">{{ product.product_family_id }}</td>
-                        <td class="admin-muted">{{ product.category }}</td>
-                        <td class="text-end admin-muted">{{ "$%.2f"|format(product.price) }}</td>
-                        <td><span class="badge badge-soft">{{ "active" if product.active else "inactive" }}</span></td>
-                        <td class="text-end admin-muted">{{ product.updated_at }}</td>
-                        <td class="text-end">
-                            <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_product_edit', product_id=product.product_id) }}">Edit</a>
-                        </td>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Family ID</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                        <th>Actions</th>
                     </tr>
-                {% else %}
-                    <tr><td colspan="8" class="admin-muted">No admin products yet.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    <div class="admin-muted small mt-3">
-        Note: On Render free plan with SQLite, DB data resets on redeploy unless you use a persistent database.
+                </thead>
+                <tbody>
+                    {% for product in products %}
+                    <tr>
+                        <td>{{ product.product_id }}</td>
+                        <td>{{ product.name }}</td>
+                        <td><code>{{ product.product_family_id }}</code></td>
+                        <td>₹{{ "%.2f"|format(product.price) }}</td>
+                        <td><span class="badge {{ 'bg-success' if product.active else 'bg-danger' }}">{{ 'Active' if product.active else 'Draft' }}</span></td>
+                        <td><a href="{{ url_for('admin_product_edit', product_id=product.product_id) }}" class="btn btn-sm btn-outline-light py-0">Edit</a></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="text-center py-4">No custom products found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endblock %}
-

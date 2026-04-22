@@ -1,41 +1,39 @@
 {% extends "admin/base.html" %}
-{% block title %}Audit · Admin · {{ site_name }}{% endblock %}
-{% block content %}
-<div class="admin-card rounded p-3">
-    <div class="d-flex align-items-center justify-content-between mb-2">
-        <div class="fw-semibold">Audit log</div>
-        <div class="admin-muted small">Latest 300</div>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>When</th>
-                    <th>Admin</th>
-                    <th>Action</th>
-                    <th>Target</th>
-                    <th>IP</th>
-                    <th>Detail</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for entry in entries %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Audit Log</h1>
+</div>
+<div class="admin-card card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
                     <tr>
-                        <td class="admin-muted">{{ entry.created_at }}</td>
-                        <td class="admin-muted">{{ entry.admin_email }}</td>
-                        <td class="fw-semibold">{{ entry.action }}</td>
-                        <td class="admin-muted">{{ entry.target_type }} {{ entry.target_id }}</td>
-                        <td class="admin-muted">{{ entry.ip_address }}</td>
-                        <td class="admin-muted" style="max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                            {{ entry.detail }}
-                        </td>
+                        <th>Timestamp</th>
+                        <th>Admin</th>
+                        <th>Action</th>
+                        <th>Target</th>
+                        <th>IP Address</th>
+                        <th>Details</th>
                     </tr>
-                {% else %}
-                    <tr><td colspan="6" class="admin-muted">No audit entries yet.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    {% for entry in entries %}
+                    <tr>
+                        <td class="text-nowrap">{{ entry.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td>{{ entry.admin_email }}</td>
+                        <td><span class="badge bg-secondary">{{ entry.action }}</span></td>
+                        <td>{{ entry.target_type }}{% if entry.target_id %}: {{ entry.target_id }}{% endif %}</td>
+                        <td><code>{{ entry.ip_address }}</code></td>
+                        <td class="text-truncate" style="max-width: 250px;" title="{{ entry.detail }}">{{ entry.detail }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="text-center py-4">No audit logs found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endblock %}
-

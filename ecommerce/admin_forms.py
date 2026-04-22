@@ -26,6 +26,7 @@ class AdminOrderStatusForm(FlaskForm):
         ],
         validators=[DataRequired()],
     )
+    delivery_agent_id = SelectField("Assign Delivery Agent", choices=[], coerce=int, validators=[OptionalValidator()])
     note = TextAreaField("Internal Note", validators=[OptionalValidator(), Length(max=500)])
     submit = SubmitField("Update order")
 
@@ -62,3 +63,32 @@ class AdminProductForm(FlaskForm):
     is_default = BooleanField("Default variant", default=True)
     active = BooleanField("Active", default=True)
     submit = SubmitField("Save product")
+
+
+class DeliveryLoginForm(FlaskForm):
+    email = StringField("Email Address", validators=[DataRequired(), Email(check_deliverability=False)])
+    password = PasswordField("Password", validators=[DataRequired()])
+    submit = SubmitField("Sign in")
+
+
+class DeliverySignupForm(FlaskForm):
+    name = StringField("Full Name", validators=[DataRequired(), Length(min=2, max=100)])
+    phone = StringField("Phone Number", validators=[DataRequired(), Length(min=10, max=20)])
+    email = StringField("Email Address", validators=[DataRequired(), Email(check_deliverability=False)])
+    password = PasswordField("Password", validators=[DataRequired(), Length(min=6)])
+    submit = SubmitField("Register")
+
+class DeliveryStatusForm(FlaskForm):
+    status = SelectField(
+        "Update Status",
+        choices=[
+            ("shipped", "Shipped"),
+            ("out_for_delivery", "Out for Delivery"),
+            ("delivered", "Delivered"),
+            ("canceled", "Canceled (Delivery Failed)"),
+        ],
+        validators=[DataRequired()],
+    )
+    delivery_otp = StringField("Customer OTP (Required to mark Delivered)", validators=[OptionalValidator(), Length(max=6)])
+    note = TextAreaField("Delivery Note", validators=[OptionalValidator(), Length(max=500)])
+    submit = SubmitField("Update Status")

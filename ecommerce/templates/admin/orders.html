@@ -1,43 +1,38 @@
 {% extends "admin/base.html" %}
-{% block title %}Orders · Admin · {{ site_name }}{% endblock %}
-{% block content %}
-<div class="admin-card rounded p-3">
-    <div class="d-flex align-items-center justify-content-between mb-2">
-        <div class="fw-semibold">Orders</div>
-        <div class="admin-muted small">Latest 100</div>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>Order</th>
-                    <th>Customer</th>
-                    <th>Status</th>
-                    <th>Payment</th>
-                    <th class="text-end">Total</th>
-                    <th class="text-end">Created</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for order in orders %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Orders</h1>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
                     <tr>
-                        <td class="fw-semibold">{{ order.order_id }}</td>
-                        <td class="admin-muted">{{ order.customer_email }}</td>
-                        <td><span class="badge badge-soft">{{ order.status }}</span></td>
-                        <td class="admin-muted">{{ order.payment_status }}</td>
-                        <td class="text-end">{{ (order.summary_json or {}).get("total_display", "") }}</td>
-                        <td class="text-end admin-muted">{{ order.created_at }}</td>
-                        <td class="text-end">
-                            <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_order_detail', order_id=order.order_id) }}">Open</a>
-                        </td>
+                        <th>Order ID</th>
+                        <th>Customer</th>
+                        <th>Status</th>
+                        <th>Payment Method</th>
+                        <th>Date</th>
                     </tr>
-                {% else %}
-                    <tr><td colspan="7" class="admin-muted">No orders yet.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr>
+                        <td><a href="{{ url_for('admin_order_detail', order_id=order.order_id) }}"><strong>{{ order.order_id }}</strong></a></td>
+                        <td>{{ order.customer_name }}</td>
+                        <td><span class="badge bg-{{ 'success' if order.status == 'delivered' else 'secondary' }}">{{ order.status|replace('_', ' ')|title }}</span></td>
+                        <td>{{ order.payment_method_label }}</td>
+                        <td>{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="text-center py-4">No orders found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endblock %}
-

@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% from "_product_macros.html" import product_card with context %}
+
+{% block title %}My Account | {{ site_name }}{% endblock %}
+{% block body_class %}account-page{% endblock %}
+
+{% block content %}
+<section class="page-hero page-hero--compact">
+    <div class="container-xxl">
+        <div class="page-hero__shell reveal-up">
+            <div class="page-hero__copy">
+                <span class="section-kicker">Welcome back</span>
+                <h1>Hello, {{ current_user.username }}</h1>
+                <p>Manage your orders, track shipments, check support tickets, and view your saved items all in one place.</p>
+            </div>
+            <div class="page-hero__meta">
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-danger"><i class="bi-box-arrow-right"></i> Sign out</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-shell">
+    <div class="container-xxl">
+        <ul class="nav nav-tabs mb-4" id="accountTabs" role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link active fw-bold text-dark" id="orders-tab" data-bs-toggle="tab" data-bs-target="#orders" type="button" role="tab">Order History</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link fw-bold text-dark" id="wishlist-tab" data-bs-toggle="tab" data-bs-target="#wishlist" type="button" role="tab">My Wishlist</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link fw-bold text-dark" id="support-tab" data-bs-toggle="tab" data-bs-target="#support" type="button" role="tab">Support Tickets</button></li>
+        </ul>
+
+        <div class="tab-content" id="accountTabsContent">
+            <!-- Orders Tab -->
+            <div class="tab-pane fade show active" id="orders" role="tabpanel">
+                <div class="row">
+                    {% for order in orders %}
+                    <div class="col-md-6 mb-4">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div><h5 class="mb-0 fw-bold">{{ order.id }}</h5><small class="text-muted">{{ order.placed_at }}</small></div>
+                                    <span class="badge bg-{{ 'success' if order.order_status == 'delivered' else 'primary' }}">{{ order.order_status|replace('_', ' ')|title }}</span>
+                                </div>
+                                <ul class="list-unstyled mb-3">
+                                    {% for item in order['items'][:2] %}
+                                    <li class="text-truncate"><small>{{ item.quantity }}x {{ item.name }} ({{ item.variant_label }})</small></li>
+                                    {% endfor %}
+                                    {% if order['items']|length > 2 %}<li><small class="text-muted">+ {{ order['items']|length - 2 }} more items</small></li>{% endif %}
+                                </ul>
+                            </div>
+                            <div class="card-footer bg-light d-flex justify-content-between align-items-center">
+                                <strong>{{ order.summary.total_display }}</strong>
+                                <div class="d-flex align-items-center gap-1">
+                                    {% if order.order_status in ['pending_payment', 'confirmed', 'processing'] %}
+                                    <form action="{{ url_for('cancel_order', tracking_number=order.tracking_number) }}" method="POST" onsubmit="return confirm('Are you sure you want to cancel this order?');" class="m-0">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
+                                    </form>
+                                    {% endif %}
+                                    <a href="{{ url_for('track_order', tracking_number=order.tracking_number) }}" class="btn btn-sm btn-primary">Track</a>
+                                    <a href="{{ url_for('invoice', order_id=order.id) }}" target="_blank" class="btn btn-sm btn-outline-dark">Invoice</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}<div class="col-12 py-5 text-center text-muted"><i class="bi bi-box-seam fs-1 d-block mb-3"></i><h4>No orders yet</h4><a href="{{ url_for('index') }}" class="btn btn-dark mt-2">Start shopping</a></div>{% endfor %}
+                </div>
+            </div>
+
+            <!-- Wishlist Tab -->
+            <div class="tab-pane fade" id="wishlist" role="tabpanel">
+                <div class="product-grid product-grid--catalog">
+                    {% for product in wishlist %}{{ product_card(product) }}{% else %}<div class="col-12 py-5 text-center text-muted" style="grid-column: 1 / -1;"><i class="bi bi-heart fs-1 d-block mb-3"></i><h4>Your wishlist is empty</h4><p>Click the heart icon on any product to save it for later.</p></div>{% endfor %}
+                </div>
+            </div>
+
+            <!-- Support Tickets Tab -->
+            <div class="tab-pane fade" id="support" role="tabpanel">
+                <div class="list-group shadow-sm border-0">
+                    {% for ticket in tickets %}<div class="list-group-item p-4"><div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0 fw-bold">{{ ticket.ticket_id }} - {{ ticket.subject }}</h6><span class="badge {{ 'bg-success' if ticket.status == 'resolved' else 'bg-secondary' }}">{{ ticket.status|title }}</span></div><p class="mb-1 text-muted">{{ ticket.message }}</p><small class="text-muted">Created: {{ ticket.created_at.strftime('%Y-%m-%d') }}</small></div>{% else %}<div class="p-5 text-center text-muted"><i class="bi bi-headset fs-1 d-block mb-3"></i><h4>No support tickets</h4></div>{% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

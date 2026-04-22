@@ -4,200 +4,105 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{{ site_name }}{% endblock %}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body class="{% block body_class %}site-page{% endblock %}">
-    <div id="loading-overlay" class="loading-overlay">
-        <div class="loading-spinner">
-            <div class="spinner-border" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-            <div class="loading-text">Loading {{ site_name }}...</div>
-        </div>
-    </div>
+<body class="{% block body_class %}{% endblock %}">
+    <div id="loading-overlay" class="loading-overlay"></div>
 
-    <div class="announcement-bar">
-        <div class="container-xxl announcement-bar__content">
-            <span><i class="bi bi-stars"></i> Premium shopping experience across curated categories</span>
-            <span><i class="bi bi-shield-check"></i> Secure checkout with trusted payment options</span>
-        </div>
-    </div>
-
-    <header class="site-header">
-        <nav class="navbar navbar-expand-lg sticky-navbar site-navbar">
-            <div class="container-xxl">
-                <a class="navbar-brand brand-lockup" href="{{ url_for('index') }}">
-                    <span class="brand-mark">SM</span>
-                    <span>
-                        <span class="brand-eyebrow">Curated after dark</span>
-                        <span class="brand-name">{{ site_name }}</span>
-                    </span>
-                </a>
-
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#siteNav" aria-controls="siteNav" aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-
-                <div class="collapse navbar-collapse" id="siteNav">
-                    <form class="site-search ms-lg-4 me-lg-4" action="{{ url_for('search') }}" method="get" role="search">
-                        <div class="search-container">
-                            <input class="form-control search-input"
-                                   type="search"
-                                   name="query"
-                                   value="{{ request.args.get('query', '') if request.endpoint == 'search' else '' }}"
-                                   placeholder="Search mobiles, fashion, books, headphones..."
-                                   aria-label="Search products"
-                                   autocomplete="off"
-                                   data-search-input>
-                            <div class="search-suggestions" data-search-suggestions></div>
-                        </div>
-                        <button class="btn btn-primary search-btn" type="submit" aria-label="Search products" title="Search products">
-                            <i class="bi bi-search"></i>
-                            <span class="visually-hidden">Search products</span>
-                        </button>
-                    </form>
-
-                    <div class="nav-actions ms-lg-auto">
-                        <a href="{{ url_for('index') }}#catalog" class="nav-action-link">Browse</a>
-                        <a href="{{ url_for('about') }}" class="nav-action-link">About</a>
-                        <a href="{{ url_for('track_order_lookup') }}" class="nav-action-link">Track</a>
-                        <a href="{{ url_for('support') }}" class="nav-action-link">Support</a>
-                        <a href="{{ url_for('cart') }}" class="cart-link" aria-label="Shopping cart" title="Shopping cart">
-                            <i class="bi bi-bag"></i>
-                            <span>Cart</span>
-                            <span class="cart-badge">{{ cart_count }}</span>
-                        </a>
-                        {% if current_user.is_authenticated %}
-                            <div class="dropdown">
-                                <button class="btn btn-outline-secondary nav-account-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="bi bi-person-circle"></i> {{ current_user.username }}
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end">
-                                    <li><a class="dropdown-item" href="{{ url_for('cart') }}">My Cart</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('checkout') }}">Checkout</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('track_order_lookup') }}">Track Orders</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('support') }}">Customer Support</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
-                                </ul>
-                            </div>
-                        {% else %}
-                            <a href="{{ url_for('login') }}" class="btn btn-outline-secondary nav-auth-btn">Login</a>
-                            <a href="{{ url_for('signup') }}" class="btn btn-primary nav-auth-btn">Create Account</a>
-                        {% endif %}
+    <nav class="navbar navbar-expand-lg sticky-navbar bg-white border-bottom">
+        <div class="container-xxl">
+            <a class="navbar-brand fw-bold fs-4" href="{{ url_for('index') }}">{{ site_name }}</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="mainNav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle text-dark" href="#" role="button" data-bs-toggle="dropdown">Shop by Category</a>
+                        <ul class="dropdown-menu border-0 shadow-sm">
+                            {% for cat in categories %}
+                            <li><a class="dropdown-item" href="{{ url_for('category_products', category_slug=cat.slug) }}"><i class="bi {{ cat.icon }} me-2 text-muted"></i>{{ cat.name }}</a></li>
+                            {% endfor %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item fw-bold" href="{{ url_for('search') }}">View Full Catalog</a></li>
+                        </ul>
+                    </li>
+                </ul>
+                
+                <form class="d-flex search-container mx-lg-4" action="{{ url_for('search') }}" method="GET" style="flex: 1; max-width: 500px;">
+                    <div class="input-group">
+                        <input type="search" name="query" class="form-control" placeholder="Search products..." data-search-input autocomplete="off">
+                        <button class="btn btn-dark" type="submit"><i class="bi bi-search"></i></button>
                     </div>
-                </div>
-            </div>
-        </nav>
-
-        <div class="mobile-search-shell d-lg-none">
-            <div class="container-xxl">
-                <form class="site-search site-search--mobile" action="{{ url_for('search') }}" method="get" role="search">
-                    <div class="search-container">
-                        <input class="form-control search-input"
-                               type="search"
-                               name="query"
-                               value="{{ request.args.get('query', '') if request.endpoint == 'search' else '' }}"
-                               placeholder="Search the ShadowMarket catalog"
-                               aria-label="Search products"
-                               autocomplete="off"
-                               data-search-input>
-                        <div class="search-suggestions" data-search-suggestions></div>
-                    </div>
-                    <button class="btn btn-primary search-btn" type="submit" aria-label="Search products">
-                        <i class="bi bi-search"></i>
-                        <span class="visually-hidden">Search products</span>
-                    </button>
+                    <div class="search-suggestions shadow-sm" data-search-suggestions></div>
                 </form>
+
+                <ul class="navbar-nav mb-2 mb-lg-0 align-items-center">
+                    <li class="nav-item me-3">
+                        <a class="nav-link position-relative text-dark" href="{{ url_for('cart') }}">
+                            <i class="bi bi-cart3 fs-5"></i>
+                            {% if cart_count > 0 %}
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.65rem;">
+                                {{ cart_count }}
+                            </span>
+                            {% endif %}
+                        </a>
+                    </li>
+                    {% if current_user.is_authenticated %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle text-dark" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> {{ current_user.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end border-0 shadow-sm">
+                            <li><a class="dropdown-item" href="{{ url_for('account') }}">My Orders & Account</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('track_order_lookup') }}">Track Orders</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">Sign Out</a></li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <li class="nav-item"><a class="nav-link text-dark" href="{{ url_for('login') }}">Log In</a></li>
+                    <li class="nav-item ms-lg-2"><a class="btn btn-dark" href="{{ url_for('signup') }}">Sign Up</a></li>
+                    {% endif %}
+                </ul>
             </div>
         </div>
+    </nav>
 
-        <div class="category-ribbon">
-            <div class="container-xxl category-ribbon__inner">
-                {% for category in categories[:8] %}
-                    <a href="{{ url_for('category_products', category_slug=category.slug) }}" class="category-pill">
-                        <i class="bi {{ category.icon }}"></i>
-                        <span>{{ category.name }}</span>
-                        <small>{{ category.family_count }} families</small>
-                    </a>
-                {% endfor %}
-            </div>
-        </div>
-    </header>
-
-    <main class="page-main">
+    <main>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                <div class="container-xxl flash-stack">
+                <div class="container-xxl mt-4">
                     {% for category, message in messages %}
-                        {% set tone = category if category in ['success', 'warning', 'danger', 'info'] else 'info' %}
-                        <div class="flash-card flash-card--{{ tone }}">
-                            <i class="bi {% if tone == 'success' %}bi-check-circle{% elif tone == 'warning' %}bi-exclamation-triangle{% elif tone == 'danger' %}bi-x-circle{% else %}bi-info-circle{% endif %}"></i>
-                            <span>{{ message }}</span>
+                        <div class="alert alert-{{ 'success' if category == 'success' else 'danger' if category == 'error' or category == 'danger' else 'warning' if category == 'warning' else 'info' }} alert-dismissible fade show shadow-sm" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>
                     {% endfor %}
                 </div>
             {% endif %}
         {% endwith %}
-
+        
         {% block content %}{% endblock %}
     </main>
 
-    <footer class="site-footer">
-        <div class="container-xxl">
-            <div class="footer-grid">
-                <div>
-                    <a class="footer-brand" href="{{ url_for('index') }}">
-                        <span class="brand-mark">SM</span>
-                        <span>{{ site_name }}</span>
-                    </a>
-                    <p class="footer-copy">
-                        A modern ecommerce storefront with a richer catalog, polished browsing,
-                        and a complete cart and checkout journey.
-                    </p>
-                </div>
-                <div>
-                    <h3 class="footer-title">Explore</h3>
-                    <ul class="footer-links">
-                        <li><a href="{{ url_for('index') }}#catalog">Featured catalog</a></li>
-                        <li><a href="{{ url_for('cart') }}">Cart</a></li>
-                        <li><a href="{{ url_for('checkout') }}">Checkout</a></li>
-                        <li><a href="{{ url_for('track_order_lookup') }}">Track order</a></li>
-                        <li><a href="{{ url_for('support') }}">Support</a></li>
-                        <li><a href="{{ url_for('search') }}">All products</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h3 class="footer-title">Categories</h3>
-                    <ul class="footer-links">
-                        <!-- {% for category in categories[:6] %} -->
-                        <li><a href="{{ url_for('category_products', category_slug=category.slug) }}">{{ category.name }}</a></li>
-                        <!-- {% endfor %} -->
-                    </ul>
-                </div>
-                <div>
-                    <h3 class="footer-title">Payment Options</h3>
-                    <ul class="footer-links footer-links--plain">
-                        <li><i class="bi bi-credit-card-2-front"></i> Credit and debit cards</li>
-                        <li><i class="bi bi-phone"></i> UPI and digital wallets</li>
-                        <li><i class="bi bi-bank"></i> Net banking flow</li>
-                        <li><i class="bi bi-cash-coin"></i> Cash on delivery</li>
-                    </ul>
-                </div>
+    <footer class="site-footer mt-auto py-5 bg-dark text-white">
+        <div class="container-xxl text-center">
+            <h4 class="mb-3 fw-bold">{{ site_name }}</h4>
+            <div class="mb-3 d-flex justify-content-center gap-4">
+                <a href="{{ url_for('about') }}" class="text-white-50 text-decoration-none">About</a>
+                <a href="{{ url_for('support') }}" class="text-white-50 text-decoration-none">Support</a>
+                <a href="{{ url_for('track_order_lookup') }}" class="text-white-50 text-decoration-none">Track Order</a>
             </div>
-            <div class="footer-bottom">
-                <span>&copy; {{ footer_year }} {{ site_name }}. Built for real shopping.</span>
-                <span>Cart total: {{ cart_total }}</span>
-            </div>
+            <p class="mb-0 text-white-50 small">&copy; {{ footer_year }} {{ site_name }}. All rights reserved.</p>
         </div>
     </footer>
 
-    <div id="toast-container" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
-    <script id="search-terms-data" type="application/json">{{ search_terms|tojson }}</script>
+    <div id="toast-container"></div>
+    <script type="application/json" id="search-terms-data">{{ search_terms | tojson | safe }}</script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>

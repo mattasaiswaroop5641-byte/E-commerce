@@ -1,61 +1,35 @@
 {% extends "base.html" %}
 
-{% block title %}Login | {{ site_name }}{% endblock %}
+{% block title %}Log In | {{ site_name }}{% endblock %}
 {% block body_class %}auth-page{% endblock %}
 
 {% block content %}
-<section class="auth-section">
+<section class="auth-section py-5">
     <div class="container-xxl">
-        <div class="auth-shell">
-            <div class="auth-story reveal-up">
-                <span class="section-kicker">Member access</span>
-                <h1>Welcome back to {{ site_name }}.</h1>
-                <p>
-                    Sign in to unlock saved likes, smarter recommendations, and a faster checkout experience.
-                </p>
-                <div class="auth-highlight-list">
-                    <div class="auth-highlight">
-                        <i class="bi bi-heart"></i>
-                        <span>Save products and revisit them fast</span>
-                    </div>
-                    <div class="auth-highlight">
-                        <i class="bi bi-bag-check"></i>
-                        <span>Run the full cart and payment journey</span>
-                    </div>
-                    <div class="auth-highlight">
-                        <i class="bi bi-stars"></i>
-                        <span>Get more tailored recommendations</span>
+        <div class="row justify-content-center">
+            <div class="col-md-5">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body p-5">
+                        <h1 class="h3 mb-4 fw-bold text-center">Welcome Back</h1>
+                        <form method="post" class="auth-form">
+                            {{ form.hidden_tag() }}
+                            <div class="mb-3">
+                                {{ form.username.label(class="form-label") }}
+                                {{ form.username(class="form-control form-control-lg", placeholder="Username") }}
+                            </div>
+                            <div class="mb-4">
+                                {{ form.password.label(class="form-label") }}
+                                {{ form.password(class="form-control form-control-lg", placeholder="Password") }}
+                            </div>
+                            <div class="d-grid">
+                                {{ form.submit(class="btn btn-dark btn-lg") }}
+                            </div>
+                        </form>
+                        <p class="text-center mt-4 mb-0 text-muted">
+                            Don't have an account? <a href="{{ url_for('signup') }}" class="text-dark fw-bold">Sign up here</a>
+                        </p>
                     </div>
                 </div>
-            </div>
-
-            <div class="auth-card reveal-up">
-                <span class="auth-card__eyebrow">Login</span>
-                <h2>Continue shopping</h2>
-                <form method="post" class="auth-form">
-                    {{ form.hidden_tag() }}
-                    <div class="auth-field">
-                        {{ form.username.label(class="form-label") }}
-                        {{ form.username(class="form-control form-control-lg", placeholder="Enter your username") }}
-                        {% for error in form.username.errors %}
-                        <div class="text-danger small mt-1">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                    <div class="auth-field">
-                        {{ form.password.label(class="form-label") }}
-                        {{ form.password(class="form-control form-control-lg", placeholder="Enter your password") }}
-                        {% for error in form.password.errors %}
-                        <div class="text-danger small mt-1">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                    <div class="d-grid">
-                        {{ form.submit(class="btn btn-primary btn-lg") }}
-                    </div>
-                </form>
-                <p class="auth-card__footer">
-                    New to {{ site_name }}?
-                    <a href="{{ url_for('signup') }}">Create an account</a>
-                </p>
             </div>
         </div>
     </div>
