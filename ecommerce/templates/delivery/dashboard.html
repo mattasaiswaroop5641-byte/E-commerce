@@ -69,6 +69,31 @@
         {% endfor %}
     </div>
 </div>
+<script>
+    // Silently check for new assigned orders every 10 seconds
+    setInterval(function() {
+        fetch(window.location.href)
+            .then(response => response.text())
+            .then(html => {
+                const parser = new DOMParser();
+                const newDoc = parser.parseFromString(html, 'text/html');
+                
+                // Grab the main content area of the dashboard
+                const newMain = newDoc.querySelector('main');
+                const currentMain = document.querySelector('main');
+                
+                // If the content has changed (i.e., a new order appeared or status changed)
+                if (newMain && currentMain && newMain.innerHTML !== currentMain.innerHTML) {
+                    currentMain.innerHTML = newMain.innerHTML;
+                    
+                    // Play a soft notification chime for the agent!
+                    const chime = new Audio('https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3');
+                    chime.play().catch(e => console.log("Audio play blocked by browser until user interacts with the page"));
+                }
+            })
+            .catch(err => console.error("Polling error:", err));
+    }, 10000); // 10000 milliseconds = 10 seconds
+</script>
 
 <script>
     // Auto-refresh the dashboard every 30 seconds to stay in sync with real-time assignments

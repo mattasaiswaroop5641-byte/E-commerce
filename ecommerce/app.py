@@ -2700,6 +2700,15 @@ def checkout():
             flash("Please choose a bank for net banking.", "warning")
         else:
             order_payload = build_order_payload(cart_items, cart_summary, form_data)
+            
+            # Auto-assign an active delivery agent to bypass manual admin assignment
+            active_agents = DeliveryAgent.query.filter_by(active=True).all() # type: ignore
+            if active_agents:
+                agent = random.choice(active_agents)
+                order_payload["summary"]["delivery_agent_id"] = agent.id
+                order_payload["summary"]["agent_name"] = agent.name
+                order_payload["summary"]["agent_phone"] = agent.phone
+                
             save_order(order_payload)
             upsert_order_record(order_payload)
 
