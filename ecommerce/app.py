@@ -3252,8 +3252,8 @@ def interact(): # type: ignore
 
 
 def prune_closed_tickets() -> None:
-    """Removes 'closed' tickets that are older than 24 hours."""
-    cutoff = datetime.utcnow() - timedelta(hours=24)
+    """Removes 'closed' tickets that are older than 30 days."""
+    cutoff = datetime.utcnow() - timedelta(days=30)
     closed_tickets: Any = SupportTicket.query.filter_by(status="closed").all() # type: ignore
     for t in closed_tickets:
         if hasattr(t, "updated_at") and t.updated_at and t.updated_at < cutoff:
