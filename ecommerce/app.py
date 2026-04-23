@@ -71,8 +71,7 @@ def initialize_database():
         # --- FIX 1: Auto-migrate PostgreSQL tables on Render to prevent 500 errors ---
         try:
             with db.engine.connect() as conn:
-                conn = conn.execution_options(isolation_level="AUTOCOMMIT")
-                # Force migration safely one-by-one without aborting Postgres transactions
+                # Force migration safely one-by-one using isolated transactions
                 statements = [
                     'ALTER TABLE "user" ADD COLUMN phone VARCHAR(40) DEFAULT \'\';',
                     'ALTER TABLE "user" ADD COLUMN profile_pic_url VARCHAR(500) DEFAULT \'\';',
@@ -88,7 +87,8 @@ def initialize_database():
                 ]
                 for stmt in statements:
                     try:
-                        conn.execute(text(stmt))
+                        with conn.begin():
+                            conn.execute(text(stmt))
                     except Exception:
                         pass  # Ignore if column already exists
         except Exception as e:
