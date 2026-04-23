@@ -17,6 +17,7 @@ from flask import Flask, flash, jsonify, redirect, render_template, request, ses
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash
 from werkzeug.exceptions import HTTPException
+from werkzeug.middleware.proxy_fix import ProxyFix
 from sqlalchemy import text, inspect
 
 from admin_forms import AdminDiscountForm, AdminLoginForm, AdminOrderStatusForm, AdminProductForm, AdminTicketUpdateForm, DeliveryLoginForm, DeliveryStatusForm, DeliverySignupForm, AgentProfileForm
@@ -44,6 +45,18 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "your-secret-key-here-change-in-production")
+
+# When deployed behind a trusted proxy (e.g., Render), honor X-Forwarded headers so
+# Flask sets cookies correctly (scheme/address). This helps CSRF and session cookies work
+# when TLS is terminated by the platform.
+if os.environ.get("FLASK_ENV", "").lower() == "production":
+    try:
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+        app.config.setdefault("SESSION_COOKIE_SECURE", True)
+        app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
+        app.logger.info("Applied ProxyFix and set SESSION_COOKIE_SECURE=True, SESSION_COOKIE_SAMESITE=Lax")
+    except Exception:
+        app.logger.exception("Failed to apply ProxyFix; continuing without it.")
 
 # --- FIX: Automatically fix Neon's postgres:// prefix and bypass stale SQLite files ---
 db_url = os.environ.get("DATABASE_URL", "sqlite:///shadowmarket_live.db")
@@ -2721,6 +2734,19 @@ def signup():
         flash("Account created successfully. Please sign in.", "success")
         return redirect(url_for("login"))
     elif request.method == "POST":
+        # Log details to help debug validation failures in deployed environments.
+        try:
+            csrf_field = app.config.get("WTF_CSRF_FIELD_NAME", "csrf_token")
+            csrf_present = bool(request.form.get(csrf_field))
+            session_keys = list(session.keys())
+            app.logger.warning(
+                "Signup validation failed (errors=%s, csrf_present=%s, session_keys=%s)",
+                form.errors,
+                csrf_present,
+                session_keys,
+            )
+        except Exception:
+            app.logger.exception("Failed to log signup debug info")
         flash("Please fix the highlighted signup fields and try again.", "warning")
 
     return render_template("signup.html", form=form)
@@ -3929,6 +3955,35 @@ def auto_verify_pending_payments() -> None:
     if dirty:
         db.session.commit() # type: ignore
 
+# Register debug endpoint at import time only when SIGNUP_DEBUG_TOKEN env is set.
+if os.environ.get("SIGNUP_DEBUG_TOKEN"):
+    @app.route("/_debug/signup-inspect", methods=["GET", "POST"])
+    def debug_signup_inspect():
+        expected_token = os.environ.get("SIGNUP_DEBUG_TOKEN", "")
+        token = request.args.get("token") or request.form.get("token") or request.headers.get("X-Debug-Token", "")
+        if token != expected_token:
+            return ("Not authorized", 403)
+
+        try:
+            headers = dict(request.headers)
+            form = request.form.to_dict()
+            cookies = dict(request.cookies)
+            data = {
+                "method": request.method,
+                "path": request.path,
+                "remote_addr": request.remote_addr,
+                "headers": headers,
+                "cookies": cookies,
+                "form": form,
+                "session_keys": list(session.keys()),
+                "csrf_present": bool(form.get(app.config.get("WTF_CSRF_FIELD_NAME", "csrf_token"))),
+            }
+            app.logger.warning("DEBUG_SIGNUP_INSPECT: %s", data)
+            return jsonify({"status": "ok", "data": data})
+        except Exception:
+            app.logger.exception("DEBUG_SIGNUP_INSPECT failed")
+            return ("error", 500)
+
 if __name__ == "__main__":
     from data.generate_dataset import create_interactions, create_products
 
@@ -3959,5 +4014,6 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all() # type: ignore
         init_recommenders(force_reload=True)
+    # Debug endpoint is registered at import time when enabled via SIGNUP_DEBUG_TOKEN.
 
     app.run(host="0.0.0.0", port=5000, debug=True)
