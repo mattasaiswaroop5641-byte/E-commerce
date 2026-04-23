@@ -4,6 +4,7 @@ import random
 import smtplib
 import threading
 import time
+import urllib.parse
 from functools import wraps
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
@@ -15,10 +16,11 @@ from dotenv import load_dotenv
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash
+from sqlalchemy import text
 
-from admin_forms import AdminDiscountForm, AdminLoginForm, AdminOrderStatusForm, AdminProductForm, AdminTicketUpdateForm, DeliveryLoginForm, DeliveryStatusForm, DeliverySignupForm
-from forms import LoginForm, SignupForm
-from models import AdminAuditLog, AdminProduct, DeliveryAgent, DiscountRule, Interaction, Order, SupportTicket, User, db
+from admin_forms import AdminDiscountForm, AdminLoginForm, AdminOrderStatusForm, AdminProductForm, AdminTicketUpdateForm, DeliveryLoginForm, DeliveryStatusForm, DeliverySignupForm, AgentProfileForm
+from forms import LoginForm, SignupForm, UserProfileForm, OTPForm
+from models import AdminAuditLog, AdminProduct, DeliveryAgent, DiscountRule, Interaction, Order, ProductReview, SupportTicket, User, db
 from recommenders.collab import CollabRecommender
 from recommenders.content_based import ContentRecommender
 
@@ -60,12 +62,32 @@ def initialize_database():
         log_mail_configuration_once()
         log_admin_configuration_once()
         db.create_all() # type: ignore
+                    
+                    # --- FIX 1: Auto-migrate PostgreSQL tables on Render to prevent 500 errors ---
+                    try:
+                        with db.engine.begin() as conn:
+                            if "postgres" in app.config["SQLALCHEMY_DATABASE_URI"]:
+                                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS phone VARCHAR(40) DEFAULT \'\';'))
+                                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS profile_pic_url VARCHAR(500) DEFAULT \'\';'))
+                                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;'))
+                                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN DEFAULT FALSE;'))
+                                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS current_otp VARCHAR(6);'))
+                                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS otp_expiry TIMESTAMP WITHOUT TIME ZONE;'))
+                                
+                                conn.execute(text('ALTER TABLE delivery_agent ADD COLUMN IF NOT EXISTS profile_pic_url VARCHAR(500) DEFAULT \'\';'))
+                                conn.execute(text('ALTER TABLE delivery_agent ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;'))
+                                conn.execute(text('ALTER TABLE delivery_agent ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN DEFAULT FALSE;'))
+                                conn.execute(text('ALTER TABLE delivery_agent ADD COLUMN IF NOT EXISTS current_otp VARCHAR(6);'))
+                                conn.execute(text('ALTER TABLE delivery_agent ADD COLUMN IF NOT EXISTS otp_expiry TIMESTAMP WITHOUT TIME ZONE;'))
+                    except Exception as e:
+                        app.logger.warning(f"Auto-migration skipped: {e}")
+
         _db_initialized = True
 
 SITE_NAME = "ShadowMarket"
 PLACEHOLDER_IMAGE_PATH = "/static/images/product-placeholder.svg"
-FREE_SHIPPING_THRESHOLD = 150.0
-STANDARD_SHIPPING_FEE = 12.0
+FREE_SHIPPING_THRESHOLD = 499.0
+STANDARD_SHIPPING_FEE = 40.0
 ESTIMATED_TAX_RATE = 0.08
 HOME_HERO_FAMILY_ID = "electronics-macbook-air-m3"
 RESULTS_PER_PAGE = 12
@@ -95,6 +117,13 @@ def _mask_secret(value: str) -> str:
     if len(raw) <= 4:
         return "****"
     return f"****{raw[-4:]}"
+
+
+def _safe_float(val: Any, default: float = 0.0) -> float:
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
 
 
 def log_mail_configuration_once() -> None:
@@ -235,6 +264,19 @@ def admin_required(view_fn):  # type: ignore
         if not admin_is_authenticated():
             flash("Please sign in to access the admin panel.", "warning")
             return redirect(url_for("admin_login", next=request.path))
+
+        # Check idle timeout (15 minutes = 900 seconds)
+        last_active = session.get("admin_last_active")
+        if last_active is not None and time.time() - last_active > 900:
+            session.pop("admin_authed", None)
+            session.pop("admin_email", None)
+            session.pop("admin_last_active", None)
+            flash("Your admin session has expired due to inactivity. Please sign in again.", "warning")
+            return redirect(url_for("admin_login", next=request.path))
+
+        # Update last active timestamp
+        session["admin_last_active"] = time.time()
+
         return view_fn(*args, **kwargs)
 
     return wrapper
@@ -449,6 +491,7 @@ family_cards_by_id: dict[str, dict[str, Any]] = {}
 category_cards_cache: list[dict[str, Any]] = []
 catalog_stats: dict[str, int] = {"product_count": 0, "family_count": 0, "category_count": 0}
 catalog_ready: bool = False
+_product_sales_cache: dict[int, int] = {}
 
 
 @login_manager.user_loader # type: ignore
@@ -628,7 +671,7 @@ def enrich_product(product_like: Any, ensure_loaded: bool = True) -> dict[str, A
     base_name = str(data.get("name", "Untitled Product")).strip() or "Untitled Product"
     variant_label = str(data.get("variant_label", "")).strip()
     variant_type = str(data.get("variant_type", "")).strip()
-    price = round(float(data.get("price", 0.0) or 0.0), 2)
+    base_price = round(float(data.get("price", 0.0) or 0.0), 2)
     thumb_image = data.get("thumb_image_url") or data.get("image_url") or PLACEHOLDER_IMAGE_PATH
     hero_image = data.get("hero_image_url") or thumb_image or PLACEHOLDER_IMAGE_PATH
     # If a fix mapping exists for this product name, override the images at render-time.
@@ -674,11 +717,28 @@ def enrich_product(product_like: Any, ensure_loaded: bool = True) -> dict[str, A
     if override_discount is not None:
         discount_percent = max(0, min(int(override_discount), 90))
 
-    original_price = round(price / (1 - discount_percent / 100), 2) if price else 0.0
+    original_price = base_price
+    price = round(original_price * (1 - discount_percent / 100), 2) if original_price else 0.0
     rating = round(min(4.9, 4.2 + (family_seed % 7) * 0.1), 1)
     review_count = 180 + (family_seed % 55) * 23
     badge = "New Drop" if product_id >= latest_product_id - 12 else "Hot Deal" if discount_percent >= 24 else "Best Seller"
     delivery_date = (datetime.now(timezone.utc) + timedelta(days=2 + (family_seed % 4))).strftime("%a, %d %b")
+    
+    is_active = coerce_bool(data.get("active", True))
+    sold = _product_sales_cache.get(product_id, 0)
+    base_capacity = 30 if (family_seed + product_id) % 6 != 0 else 5
+    stock_remaining = max(0, base_capacity - sold)
+    
+    if not is_active or stock_remaining <= 0:
+        stock_text = "Out of stock"
+        can_buy = False
+    elif stock_remaining <= 5:
+        stock_text = f"Only {stock_remaining} left"
+        can_buy = True
+    else:
+        stock_text = "Ready to ship"
+        can_buy = True
+
     variant_count: int = len(family_group) if family_group is not None else 1 # type: ignore
     full_name = f"{base_name} - {variant_label}" if variant_label else base_name
 
@@ -711,7 +771,8 @@ def enrich_product(product_like: Any, ensure_loaded: bool = True) -> dict[str, A
         "rating": rating,
         "review_count": review_count,
         "badge": badge,
-        "stock_text": "Low stock" if (family_seed + product_id) % 6 == 0 else "Ready to ship",
+        "stock_text": stock_text,
+        "can_buy": can_buy,
         "delivery_text": f"Delivery by {delivery_date}",
         "has_price_range": False,
         "price_range_display": format_money(price),
@@ -726,8 +787,8 @@ def build_family_card(group: Any, ensure_loaded: bool = True) -> dict[str, Any]:
 
     default_row = _default_row_for_group(group)
     base_product: dict[str, Any] = enrich_product(default_row, ensure_loaded=False)
-    min_price = round(float(group["price"].min()), 2)
-    max_price = round(float(group["price"].max()), 2)
+    min_original = round(float(group["price"].min()), 2)
+    max_original = round(float(group["price"].max()), 2)
     variant_labels = [
         str(value).strip()
         for value in group["variant_label"].tolist()
@@ -741,7 +802,9 @@ def build_family_card(group: Any, ensure_loaded: bool = True) -> dict[str, Any]:
             break
 
     base_discount = base_product["discount_percent"]
-    original_price = round(min_price / (1 - base_discount / 100), 2) if min_price else 0.0
+    min_price = round(min_original * (1 - base_discount / 100), 2) if min_original else 0.0
+    max_price = round(max_original * (1 - base_discount / 100), 2) if max_original else 0.0
+    original_price = min_original
     newest_product_id = int(group["product_id"].max())
     variant_count: int = int(len(group)) # type: ignore
 
@@ -820,9 +883,22 @@ def init_recommenders(force_reload: bool = False) -> None:
     global category_cards_cache
     global catalog_stats
     global catalog_ready
+    global _product_sales_cache
 
     if catalog_ready and not force_reload:
         return
+
+    _product_sales_cache = {}
+    try:
+        all_orders = Order.query.filter(Order.status != "canceled").all() # type: ignore
+        for o in all_orders:
+            if o.items_json:
+                for item in o.items_json:
+                    pid = item.get("product_id")
+                    if pid:
+                        _product_sales_cache[pid] = _product_sales_cache.get(pid, 0) + int(item.get("quantity", 1))
+    except Exception:
+        pass
 
     csv_path = os.path.join(os.path.dirname(__file__), "data", "products.csv")
     if not os.path.exists(csv_path):
@@ -841,7 +917,7 @@ def init_recommenders(force_reload: bool = False) -> None:
     # Append admin-managed products stored in the database (optional).
     # Note: On Render free plan with SQLite, these rows will reset on redeploy unless you use a persistent DB.
     try:
-        admin_products: Any = AdminProduct.query.filter_by(active=True).all() # type: ignore
+        admin_products: Any = AdminProduct.query.all() # type: ignore
     except Exception:
         admin_products = []
 
@@ -865,6 +941,7 @@ def init_recommenders(force_reload: bool = False) -> None:
                     "image_url": str(getattr(product, "image_url", "") or "").strip(),
                     "thumb_image_url": str(getattr(product, "thumb_image_url", "") or "").strip(),
                     "hero_image_url": str(getattr(product, "hero_image_url", "") or "").strip(),
+                    "active": bool(getattr(product, "active", True)),
                 }
             )
 
@@ -881,6 +958,7 @@ def init_recommenders(force_reload: bool = False) -> None:
         "thumb_image_url": "",
         "hero_image_url": "",
         "image_url": "",
+        "active": True,
     }
     for column, default in defaults.items():
         if column not in products_df.columns:
@@ -888,6 +966,16 @@ def init_recommenders(force_reload: bool = False) -> None:
 
     products_df["product_id"] = pd.to_numeric(products_df["product_id"], errors="coerce").fillna(0).astype(int)
     products_df["price"] = pd.to_numeric(products_df["price"], errors="coerce").fillna(0.0)
+
+    # --- FIX 3: Scale all dataset prices to realistic IRL Rupee prices globally ---
+    def scale_to_inr(p: float) -> float:
+        if 0 < p < 5000:
+            scaled = round(p * 83.0)
+            return float((scaled // 100) * 100 + 99)
+        return float(round(p, 2))
+        
+    products_df["price"] = products_df["price"].apply(scale_to_inr)
+
     products_df["product_family_id"] = products_df["product_family_id"].astype(str).str.strip()
     missing_family_mask = products_df["product_family_id"] == ""
     if missing_family_mask.any():
@@ -1241,7 +1329,9 @@ def add_to_cart_state(product_id: int, quantity: int = 1, replace: bool = False)
     cart_map = get_cart_map()
     product_key = str(product_id)
     current_quantity = int(cart_map.get(product_key, 0))
-    cart_map[product_key] = max(1, quantity) if replace else current_quantity + max(1, quantity)
+    new_qty = max(1, quantity) if replace else current_quantity + max(1, quantity)
+    # Hard cap at 10 to prevent Stripe API crashes and unrealistic orders
+    cart_map[product_key] = min(new_qty, 10)
     save_cart_map(cart_map)
 
 
@@ -1597,10 +1687,13 @@ def send_html_email_async(subject: str, recipient_email: str, text_content: str,
         app.logger.exception("Failed to send email '%s' to %s: %s", subject, recipient, exc)
 
 
-def send_status_update_email_async(order_payload: dict[str, Any], recipient_email: str, new_status: str) -> None:
+def send_status_update_email_async(order_payload: dict[str, Any], recipient_email: str, new_status: str, invoice_url: str = "") -> None:
     if new_status == "delivered":
         subject = f"Your ShadowMarket Order {order_payload['id']} has been Delivered!"
         body = "Great news! Your order has been delivered successfully. Enjoy your purchase!"
+    elif new_status == "processing":
+        subject = f"Payment Verified: Order {order_payload['id']} is Processing"
+        body = "Your payment has been successfully verified! We are now packing your items."
     elif new_status == "canceled":
         subject = f"Your ShadowMarket Order {order_payload['id']} has been Canceled"
         body = "Your order has been canceled. If you have any questions, please contact our support team."
@@ -1616,10 +1709,12 @@ def send_status_update_email_async(order_payload: dict[str, Any], recipient_emai
     else:
         return
 
+    invoice_html = f'<p><a href="{invoice_url}" style="color: #0066cc; font-weight: bold;">Download / View Invoice</a></p>' if new_status == "delivered" and invoice_url else ""
+
     send_html_email_async(
         subject=subject,
         recipient_email=recipient_email,
-        text_content=body,
+        text_content=body + (f"\n\nView your invoice here: {invoice_url}" if new_status == "delivered" and invoice_url else ""),
         html_content=f"""
         <html>
         <body style="font-family: Arial, sans-serif; color: #333;">
@@ -1627,6 +1722,7 @@ def send_status_update_email_async(order_payload: dict[str, Any], recipient_emai
             <p>{body}</p>
             <p><strong>Current Status:</strong> <span style="text-transform: uppercase;">{new_status.replace('_', ' ')}</span></p>
             <p><a href="{order_payload['tracking_url']}" style="color: #0066cc;">View Order Details</a></p>
+            {invoice_html}
         </body>
         </html>
         """
@@ -1634,8 +1730,9 @@ def send_status_update_email_async(order_payload: dict[str, Any], recipient_emai
 
 
 def send_status_update_email(order_payload: dict[str, Any], recipient_email: str, new_status: str) -> None:
-    if recipient_email and new_status in ["delivered", "canceled", "shipped", "out_for_delivery"]:
-        thread = threading.Thread(target=send_status_update_email_async, args=(order_payload, recipient_email, new_status), daemon=True)
+    if recipient_email and new_status in ["delivered", "canceled", "shipped", "out_for_delivery", "processing"]:
+        invoice_url = url_for("invoice", order_id=order_payload["id"], _external=True)
+        thread = threading.Thread(target=send_status_update_email_async, args=(order_payload, recipient_email, new_status, invoice_url), daemon=True)
         thread.start()
 
 
@@ -1681,6 +1778,22 @@ def send_order_email(order_payload: dict[str, Any], recipient_email: str) -> Non
     if recipient_email:
         thread = threading.Thread(target=send_order_email_async, args=(order_payload, recipient_email), daemon=True)
         thread.start()
+
+
+def send_otp_email_async(recipient_email: str, otp: str) -> None:
+    send_html_email_async(
+        subject="Your ShadowMarket Verification Code",
+        recipient_email=recipient_email,
+        text_content=f"Your verification code is: {otp}. It expires in 10 minutes.",
+        html_content=f"<html><body style='font-family: Arial, sans-serif;'><h2>ShadowMarket Verification</h2><p>Your 6-digit OTP code is:</p><h1 style='letter-spacing: 5px; color: #f97316;'>{otp}</h1><p>This code expires in 10 minutes. Do not share it with anyone.</p></body></html>",
+    )
+
+
+def send_otp_sms_mock(phone: str, otp: str) -> None:
+    # MOCK SMS SENDER: Replace with Twilio API in production!
+    app.logger.warning(f"\n{'='*50}\n[MOCK SMS API] Sent to {phone}:\nYour ShadowMarket OTP is {otp}\n{'='*50}\n")
+    # --- FIX 2: Flash the SMS directly on the screen so you can test it without a Twilio account! ---
+    flash(f"📱 [TEST MODE SMS] Message sent to {phone}: Your OTP is {otp}", "info")
 
 
 def send_welcome_email_async(
@@ -2025,6 +2138,7 @@ def admin_login():
 
         session["admin_authed"] = True
         session["admin_email"] = expected_email
+        session["admin_last_active"] = time.time()
         if require_2fa and form.remember.data:
             session["admin_2fa_valid_until"] = int(time.time() + 30 * 24 * 3600)
         else:
@@ -2049,6 +2163,7 @@ def admin_logout():
     session.pop("admin_authed", None)
     session.pop("admin_email", None)
     session.pop("admin_2fa_valid_until", None)
+    session.pop("admin_last_active", None)
     flash("Admin signed out.", "info")
     return redirect(url_for("admin_login"))
 
@@ -2057,9 +2172,11 @@ def admin_logout():
 @admin_required
 def admin_dashboard():
     prune_canceled_orders()
+    auto_assign_pending_orders()
+    auto_verify_pending_payments()
     # Analytics metrics
     total_orders = Order.query.count() # type: ignore
-    total_revenue = sum(float(o.summary_json.get("total_price", 0)) for o in Order.query.all() if hasattr(o, "summary_json")) # type: ignore
+    total_revenue = sum(_safe_float(dict(o.summary_json or {}).get("total", 0)) for o in Order.query.all()) # type: ignore
     delivered_orders = Order.query.filter_by(status="delivered").count() # type: ignore
     open_tickets_count = SupportTicket.query.filter_by(status="open").count() # type: ignore
     
@@ -2086,6 +2203,8 @@ def admin_dashboard():
 @admin_required
 def admin_orders():
     prune_canceled_orders()
+    auto_assign_pending_orders()
+    auto_verify_pending_payments()
     order_records: Any = Order.query.order_by(Order.created_at.desc()).limit(100).all() # type: ignore
     return render_template("admin/orders.html", orders=order_records)
 
@@ -2138,6 +2257,28 @@ def admin_order_detail(order_id: str):
         tracking_timeline=tracking_timeline,
         form=form,
     )
+
+
+@app.route("/admin/orders/<order_id>/verify", methods=["POST"])
+@admin_required
+def admin_verify_payment(order_id: str):
+    order_record = get_order_record_by_order_id(order_id)
+    if not order_record:
+        flash("Order not found.", "warning")
+        return redirect(url_for("admin_orders"))
+        
+    if order_record.status == "pending_payment":
+        order_record.status = "processing"
+        order_record.payment_status = f"Manual Admin Verification ({order_record.payment_method_id.upper()})"
+        db.session.commit() # type: ignore
+        
+        order_payload = order_record_to_payload(order_record)
+        send_status_update_email(order_payload, order_payload["customer"]["email"], "processing")
+        
+        admin_audit("payment_verified", target_type="order", target_id=order_id, detail="Admin manually verified payment")
+        flash("Payment verified successfully. Order moved to processing.", "success")
+        
+    return redirect(url_for("admin_order_detail", order_id=order_id))
 
 
 @app.route("/admin/tickets")
@@ -2352,8 +2493,11 @@ def admin_users_export():
 @admin_required
 def admin_user_delete(user_id: int):
     user = User.query.get_or_404(user_id) # type: ignore
-    # Delete user's interaction history first to prevent database constraint errors
+    # Prevent Foreign Key constraint crashes
     Interaction.query.filter_by(user_id=user.id).delete() # type: ignore
+    Order.query.filter_by(user_id=user.id).update({"user_id": None}) # type: ignore
+    SupportTicket.query.filter_by(user_id=user.id).update({"user_id": None}) # type: ignore
+    
     db.session.delete(user) # type: ignore
     db.session.commit() # type: ignore
     admin_audit("user_delete", target_type="user", target_id=str(user_id), detail=user.username)
@@ -2374,10 +2518,21 @@ def admin_agent_toggle(agent_id: int):
 @admin_required
 def admin_agent_delete(agent_id: int):
     agent = DeliveryAgent.query.get_or_404(agent_id) # type: ignore
+    
+    # Return assigned orders back to the open pool to prevent Ghost Orders
+    active_orders: Any = Order.query.filter(Order.status.in_(["processing", "shipped", "out_for_delivery"])).all() # type: ignore
+    for o in active_orders:
+        summary = dict(o.summary_json or {})
+        if str(summary.get("delivery_agent_id", "")) == str(agent_id):
+            summary.pop("delivery_agent_id", None)
+            summary.pop("agent_name", None)
+            summary.pop("agent_phone", None)
+            o.summary_json = summary
+            
     db.session.delete(agent) # type: ignore
     db.session.commit() # type: ignore
     admin_audit("agent_delete", target_type="agent", target_id=str(agent_id), detail=agent.name)
-    flash(f"Agent {agent.name} deleted.", "success")
+    flash(f"Agent {agent.name} deleted. Their active orders were returned to the open pool.", "success")
     return redirect(url_for("admin_users"))
 
 @app.route("/admin/analytics")
@@ -2387,7 +2542,7 @@ def admin_analytics():
     
     # Overall stats
     total_orders = Order.query.count() # type: ignore
-    total_revenue = sum(float(o.summary_json.get("total_price", 0)) for o in Order.query.all() if hasattr(o, "summary_json")) # type: ignore
+    total_revenue = sum(_safe_float(dict(o.summary_json or {}).get("total", 0)) for o in Order.query.all()) # type: ignore
     delivered_orders = Order.query.filter_by(status="delivered").count() # type: ignore
     pending_orders = Order.query.filter_by(status="processing").count() # type: ignore
     open_tickets = SupportTicket.query.filter_by(status="open").count() # type: ignore
@@ -2399,7 +2554,7 @@ def admin_analytics():
     status_breakdown = {}
     for status in ["pending_payment", "confirmed", "processing", "shipped", "out_for_delivery", "delivered"]:
         orders_with_status = Order.query.filter_by(status=status).all() # type: ignore
-        revenue = sum(float(o.summary_json.get("total_price", 0)) for o in orders_with_status if hasattr(o, "summary_json"))
+        revenue = sum(_safe_float(dict(o.summary_json or {}).get("total", 0)) for o in orders_with_status)
         status_breakdown[status] = {
             "count": len(orders_with_status),
             "revenue": round(revenue, 2)
@@ -2408,7 +2563,7 @@ def admin_analytics():
     # Last 7 days orders
     seven_days_ago = datetime.utcnow() - timedelta(days=7)
     recent_orders = Order.query.filter(Order.created_at >= seven_days_ago).all() # type: ignore
-    recent_revenue = sum(float(o.summary_json.get("total_price", 0)) for o in recent_orders if hasattr(o, "summary_json"))
+    recent_revenue = sum(_safe_float(dict(o.summary_json or {}).get("total", 0)) for o in recent_orders)
     
     # Top products by order count
     all_orders = Order.query.all() # type: ignore
@@ -2450,7 +2605,11 @@ def login():
             login_user(user, remember=True) # type: ignore
             send_login_email(user.email, user.username) # type: ignore
             flash("Welcome back to ShadowMarket.", "success")
-            return redirect(url_for("index"))
+            
+            next_page = str(request.args.get("next") or "").strip()
+            if not next_page.startswith("/") or next_page.startswith("//"):
+                next_page = url_for("index")
+            return redirect(next_page)
         flash("Invalid username or password.", "warning")
     elif request.method == "POST":
         flash("Please complete the login form correctly.", "warning")
@@ -2576,13 +2735,62 @@ def product(product_id):
         exclude_family_ids=[product_data["family_id"]],
         preferred_categories=[product_data["category"]],
     )
+    
+    reviews = ProductReview.query.filter_by(product_id=product_id, active=True).order_by(ProductReview.created_at.desc()).all() # type: ignore
 
     return render_template(
         "product.html",
         product=product_data,
         variant_options=variant_options,
         similar_products=similar_products,
+        reviews=reviews,
     )
+
+@app.route("/product/<int:product_id>/review", methods=["POST"])
+@login_required # type: ignore
+def add_product_review(product_id: int):
+    product = get_product_by_id(product_id)
+    if not product:
+        flash("Product not found.", "warning")
+        return redirect(url_for("index"))
+        
+    existing_review = ProductReview.query.filter_by(product_id=product_id, customer_email=current_user.email).first() # type: ignore
+    if existing_review:
+        flash("You have already reviewed this product. Thank you for your feedback!", "info")
+        return redirect(url_for("product", product_id=product_id))
+        
+    try:
+        rating = int(request.form.get("rating", 5))
+    except (ValueError, TypeError):
+        rating = 5
+        
+    title = str(request.form.get("title", "")).strip()
+    comment = str(request.form.get("comment", "")).strip()
+    
+    verified = False
+    user_orders = Order.query.filter_by(user_id=current_user.id).all() # type: ignore
+    for o in user_orders:
+        if o.items_json:
+            for item in o.items_json:
+                if int(item.get("product_id", 0)) == product_id:
+                    verified = True
+                    break
+        if verified:
+            break
+            
+    review = ProductReview(
+        product_id=product_id, # type: ignore[call-arg]
+        customer_email=current_user.email, # type: ignore[call-arg]
+        rating=rating, # type: ignore[call-arg]
+        title=title, # type: ignore[call-arg]
+        comment=comment, # type: ignore[call-arg]
+        verified_purchase=verified # type: ignore[call-arg]
+    )
+    db.session.add(review) # type: ignore
+    db.session.commit() # type: ignore
+    
+    flash("Thank you for your review!", "success")
+    return redirect(url_for("product", product_id=product_id))
 
 
 @app.route("/cart")
@@ -2608,12 +2816,23 @@ def add_to_cart(product_id: int):
     if product is None:
         flash("Product not found.", "warning")
         return redirect(url_for("index"))
+        
+    if not product.get("can_buy", True):
+        flash(f"Sorry, {product['full_name']} is currently out of stock.", "danger")
+        return redirect(request.form.get("next") or request.referrer or url_for("index"))
 
-    quantity = max(1, min(int(request.form.get("quantity", 1) or 1), 6))
+    try:
+        quantity = max(1, min(int(request.form.get("quantity", 1) or 1), 6))
+    except (ValueError, TypeError):
+        quantity = 1
+        
     add_to_cart_state(product_id, quantity=quantity)
     flash(f"{product['full_name']} was added to your cart.", "success")
 
-    next_url = request.form.get("next") or request.referrer or url_for("cart")
+    next_url = str(request.form.get("next") or request.referrer or "").strip()
+    if not next_url.startswith("/") or next_url.startswith("//"):
+        next_url = url_for("cart")
+        
     return redirect(next_url)
 
 
@@ -2623,6 +2842,10 @@ def buy_now(product_id: int):
     if product is None:
         flash("Product not found.", "warning")
         return redirect(url_for("index"))
+        
+    if not product.get("can_buy", True):
+        flash(f"Sorry, {product['full_name']} is currently out of stock.", "danger")
+        return redirect(request.referrer or url_for("index"))
 
     add_to_cart_state(product_id, quantity=1)
     return redirect(url_for("checkout"))
@@ -2635,7 +2858,11 @@ def update_cart_item(product_id: int):
         flash("Product not found.", "warning")
         return redirect(url_for("cart"))
 
-    quantity = max(1, min(int(request.form.get("quantity", 1) or 1), 6))
+    try:
+        quantity = max(1, min(int(request.form.get("quantity", 1) or 1), 6))
+    except (ValueError, TypeError):
+        quantity = 1
+        
     add_to_cart_state(product_id, quantity=quantity, replace=True)
     flash(f"Updated quantity for {product['full_name']}.", "success")
     return redirect(url_for("cart"))
@@ -2655,6 +2882,7 @@ def remove_from_cart(product_id: int):
 
 
 @app.route("/checkout", methods=["GET", "POST"])
+@login_required # type: ignore
 def checkout():
     cart_items = get_cart_items()
     if not cart_items:
@@ -2677,6 +2905,11 @@ def checkout():
     }
 
     if request.method == "POST":
+        for item in cart_items:
+            if not item.get("can_buy", True):
+                flash(f"Sorry, {item['full_name']} went out of stock. Please remove it from your cart.", "danger")
+                return redirect(url_for("cart"))
+
         for key in form_data:
             form_data[key] = (request.form.get(key) or "").strip()
 
@@ -2701,14 +2934,6 @@ def checkout():
         else:
             order_payload = build_order_payload(cart_items, cart_summary, form_data)
             
-            # Auto-assign an active delivery agent to bypass manual admin assignment
-            active_agents = DeliveryAgent.query.filter_by(active=True).all() # type: ignore
-            if active_agents:
-                agent = random.choice(active_agents)
-                order_payload["summary"]["delivery_agent_id"] = agent.id
-                order_payload["summary"]["agent_name"] = agent.name
-                order_payload["summary"]["agent_phone"] = agent.phone
-                
             save_order(order_payload)
             upsert_order_record(order_payload)
 
@@ -2746,11 +2971,21 @@ def checkout():
                         stripe_ready=is_stripe_ready(),
                     )
 
-            order_payload["order_status"] = "processing"
-            if form_data["payment_method"] != "cod":
-                order_payload["payment_status"] = "Payment submitted"
+            if form_data["payment_method"] in ["upi", "netbanking"]:
+                order_payload["order_status"] = "pending_payment"
+                order_payload["payment_status"] = "Awaiting verification"
+            else:
+                order_payload["order_status"] = "processing"
+                if form_data["payment_method"] != "cod":
+                    order_payload["payment_status"] = "Payment submitted"
 
             record_order_interactions(cart_items)
+            
+            # Update live stock tracking
+            for item in cart_items:
+                pid = item["product_id"]
+                _product_sales_cache[pid] = _product_sales_cache.get(pid, 0) + item["quantity"]
+                
             upsert_order_record(order_payload)
             save_cart_map({})
             send_order_email(order_payload, form_data["email"])
@@ -2770,6 +3005,7 @@ def checkout():
 
 
 @app.route("/checkout/stripe-success/<order_id>")
+@login_required # type: ignore
 def stripe_checkout_success(order_id: str):
     order_record = get_order_record_by_order_id(order_id)
     if order_record is None:
@@ -2824,6 +3060,7 @@ def stripe_checkout_success(order_id: str):
 
 
 @app.route("/checkout/stripe-cancel/<order_id>")
+@login_required # type: ignore
 def stripe_checkout_cancel(order_id: str):
     order_record = get_order_record_by_order_id(order_id)
     if order_record is not None:
@@ -2868,6 +3105,7 @@ def order_success(order_id: str):
 @app.route("/track", methods=["GET", "POST"])
 def track_order_lookup():
     prune_canceled_orders()
+    auto_verify_pending_payments()
     if request.method == "POST":
         tracking_number = str(request.form.get("tracking_number", "")).strip().upper()
         if not tracking_number:
@@ -2891,6 +3129,7 @@ def track_order_lookup():
 
 @app.route("/track/<tracking_number>")
 def track_order(tracking_number: str):
+    auto_verify_pending_payments()
     tracking_number = str(tracking_number).strip().upper()
     order_record = get_order_record_by_tracking_number(tracking_number)
     order_payload: Optional[dict[str, Any]] = order_record_to_payload(order_record) if order_record is not None else None
@@ -2922,7 +3161,7 @@ def cancel_order(tracking_number: str):
     order_record = get_order_record_by_tracking_number(tracking_number)
     
     if order_record:
-        if order_record.user_id and (not current_user.is_authenticated or current_user.id != order_record.user_id):
+        if order_record.user_id and (not current_user.is_authenticated or current_user.id != order_record.user_id): # type: ignore
             flash("Unauthorized to cancel this order.", "danger")
             return redirect(url_for("track_order", tracking_number=tracking_number))
         status = str(order_record.status)
@@ -2939,13 +3178,21 @@ def cancel_order(tracking_number: str):
         
     if order_record:
         order_record.status = "canceled"
-        db.session.commit()
+        db.session.commit() # type: ignore
         order_payload = order_record_to_payload(order_record)
     else:
         session_order["order_status"] = "canceled"
         session.modified = True
         order_payload = session_order
         
+    # SECURITY FIX: Restore inventory cache to prevent Denial of Service stock exhaustion
+    items = order_payload.get("items", [])
+    for item in items:
+        pid = item.get("product_id")
+        qty = item.get("quantity", 1)
+        if pid:
+            _product_sales_cache[pid] = max(0, _product_sales_cache.get(pid, 0) - int(qty))
+            
     send_status_update_email(order_payload, order_payload["customer"]["email"], "canceled")
     
     flash("Your order has been successfully canceled.", "success")
@@ -2961,7 +3208,13 @@ def rate_delivery(tracking_number: str):
         return redirect(url_for("track_order", tracking_number=tracking_number))
         
     summary = dict(order_record.summary_json or {})
-    summary["delivery_rating"] = int(request.form.get("rating", 5))
+    
+    try:
+        rating = int(request.form.get("rating", 5))
+    except (ValueError, TypeError):
+        rating = 5
+        
+    summary["delivery_rating"] = rating
     summary["delivery_feedback"] = str(request.form.get("feedback", "")).strip()
     
     tip_amount = str(request.form.get("tip", "")).strip()
@@ -3027,10 +3280,13 @@ def delivery_logout():
 @app.route("/delivery")
 @delivery_required
 def delivery_dashboard():
+    auto_assign_pending_orders()
     agent_id = session.get("delivery_agent_id")
     agent = DeliveryAgent.query.get(agent_id) # type: ignore
     all_active = Order.query.filter(Order.status.in_(["processing", "shipped", "out_for_delivery"])).order_by(Order.created_at.asc()).all() # type: ignore
+    
     active_orders = [o for o in all_active if str(o.summary_json.get("delivery_agent_id", "")) == str(agent_id)]
+    unassigned_orders = [o for o in all_active if not o.summary_json.get("delivery_agent_id")]
     
     all_delivered = Order.query.filter_by(status="delivered").order_by(Order.updated_at.desc()).all() # type: ignore
     agent_delivered = [o for o in all_delivered if str(o.summary_json.get("delivery_agent_id", "")) == str(agent_id)]
@@ -3039,7 +3295,7 @@ def delivery_dashboard():
     today = datetime.utcnow().date()
     delivered_today = sum(1 for o in agent_delivered if o.updated_at and o.updated_at.date() == today)
     
-    return render_template("delivery/dashboard.html", active_orders=active_orders, recent_delivered=recent_delivered, agent=agent, delivered_today=delivered_today)
+    return render_template("delivery/dashboard.html", active_orders=active_orders, unassigned_orders=unassigned_orders, recent_delivered=recent_delivered, agent=agent, delivered_today=delivered_today)
 
 @app.route("/delivery/toggle_status", methods=["POST"])
 @delivery_required
@@ -3051,6 +3307,94 @@ def delivery_toggle_status():
         db.session.commit() # type: ignore
         flash(f"You are now {'On Duty' if agent.active else 'Off Duty'}.", "success")
     return redirect(url_for("delivery_dashboard"))
+
+@app.route("/delivery/profile", methods=["GET", "POST"])
+@delivery_required
+def delivery_profile():
+    agent_id = session.get("delivery_agent_id")
+    agent = DeliveryAgent.query.get(agent_id) # type: ignore
+    
+    if not agent:
+        flash("Agent session invalid. Please sign in again.", "danger")
+        return redirect(url_for("delivery_login"))
+    
+    form = AgentProfileForm(
+        name=agent.name, # type: ignore
+        email=agent.email, # type: ignore
+        phone=agent.phone, # type: ignore
+        profile_pic_url=agent.profile_pic_url # type: ignore
+    )
+    
+    if form.validate_on_submit():
+        new_email = str(form.email.data or "").strip().lower()
+        if new_email != agent.email and DeliveryAgent.query.filter_by(email=new_email).first(): # type: ignore
+            flash("That email is already registered to another agent.", "danger")
+            return redirect(url_for("delivery_profile"))
+            
+        if agent.email != form.email.data: # type: ignore
+            agent.email_verified = False # type: ignore
+        if agent.phone != form.phone.data: # type: ignore
+            agent.phone_verified = False # type: ignore
+            
+        agent.name = str(form.name.data or "").strip() # type: ignore
+        agent.email = str(form.email.data or "").strip().lower() # type: ignore
+        agent.phone = str(form.phone.data or "").strip() # type: ignore
+        agent.profile_pic_url = str(form.profile_pic_url.data or "").strip() # type: ignore
+        
+        db.session.commit() # type: ignore
+        flash("Profile updated successfully.", "success")
+        return redirect(url_for("delivery_profile"))
+        
+    return render_template("profile.html", form=form, target="agent", agent=agent)
+
+
+@app.route("/delivery/verify/<method>", methods=["GET", "POST"])
+@delivery_required
+def delivery_verify(method: str):
+    agent_id = session.get("delivery_agent_id")
+    agent = DeliveryAgent.query.get(agent_id) # type: ignore
+    
+    if not agent:
+        flash("Agent session invalid. Please sign in again.", "danger")
+        return redirect(url_for("delivery_login"))
+    
+    if method == "send_email":
+        agent.current_otp = str(random.randint(100000, 999999)) # type: ignore
+        agent.otp_expiry = datetime.utcnow() + timedelta(minutes=10) # type: ignore
+        db.session.commit() # type: ignore
+        threading.Thread(target=send_otp_email_async, args=(agent.email, agent.current_otp), daemon=True).start() # type: ignore
+        flash("OTP sent to your email address.", "info")
+        return redirect(url_for("delivery_verify", method="email"))
+        
+    if method == "send_phone":
+        agent.current_otp = str(random.randint(100000, 999999)) # type: ignore
+        agent.otp_expiry = datetime.utcnow() + timedelta(minutes=10) # type: ignore
+        db.session.commit() # type: ignore
+        send_otp_sms_mock(agent.phone, agent.current_otp) # type: ignore
+        flash("OTP sent via SMS (Check server console).", "info")
+        return redirect(url_for("delivery_verify", method="phone"))
+
+    form = OTPForm()
+    if form.validate_on_submit():
+        if not agent.current_otp or not agent.otp_expiry or datetime.utcnow() > agent.otp_expiry: # type: ignore
+            flash("OTP expired. Please request a new one.", "danger")
+            return redirect(url_for("delivery_verify", method=method))
+            
+        if str(form.otp.data) == str(agent.current_otp): # type: ignore
+            agent.current_otp = None # type: ignore
+            agent.otp_expiry = None # type: ignore
+            if method == "email":
+                agent.email_verified = True # type: ignore
+                flash("Email verified successfully!", "success")
+            elif method == "phone":
+                agent.phone_verified = True # type: ignore
+                flash("Phone verified successfully!", "success")
+            db.session.commit() # type: ignore
+            return redirect(url_for("delivery_profile"))
+        else:
+            flash("Invalid OTP. Try again.", "danger")
+            
+    return render_template("verify_otp.html", form=form, method=method, target_url=url_for("delivery_verify", method=method))
 
 @app.route("/delivery/order/<order_id>", methods=["GET", "POST"])
 @delivery_required
@@ -3076,6 +3420,13 @@ def delivery_order_detail(order_id: str):
                 return redirect(url_for("delivery_order_detail", order_id=order_id))
             summary.pop("delivery_otp", None)  # Clear it once successfully used
             
+            if order_record.payment_method_id == "cod":
+                if form.cod_paid_via_upi.data:
+                    order_record.payment_method_label = "UPI (Paid at Door)"
+                    order_record.payment_status = "Paid via UPI to Agent"
+                else:
+                    order_record.payment_status = "Paid in Cash to Agent"
+
         # Generate OTP and capture agent info if just heading out
         if new_status == "out_for_delivery" and previous_status != "out_for_delivery":
             summary["delivery_otp"] = str(random.randint(1000, 9999))
@@ -3093,7 +3444,12 @@ def delivery_order_detail(order_id: str):
         flash("Order status updated.", "success")
         return redirect(url_for("delivery_order_detail", order_id=order_id))
     order_payload = order_record_to_payload(order_record)
-    return render_template("delivery/order_detail.html", order=order_payload, order_record=order_record, form=form)
+    
+    cart_total = order_payload.get("summary", {}).get("total", 0)
+    upi_data = urllib.parse.quote(f"upi://pay?pa=shadowmarket@upi&pn=ShadowMarket&am={cart_total}&cu=INR")
+    agent_qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={upi_data}"
+    
+    return render_template("delivery/order_detail.html", order=order_payload, order_record=order_record, form=form, agent_qr_url=agent_qr_url)
 
 @app.route("/delivery/order/<order_id>/unassign", methods=["POST"])
 @delivery_required
@@ -3106,11 +3462,52 @@ def delivery_unassign(order_id: str):
         
     summary = dict(order_record.summary_json or {})
     summary.pop("delivery_agent_id", None)
+    summary.pop("agent_name", None)
+    summary.pop("agent_phone", None)
     order_record.summary_json = summary
     db.session.commit() # type: ignore
     
     flash(f"You have been successfully unassigned from order {order_id}.", "success")
     return redirect(url_for("delivery_dashboard"))
+
+@app.route("/delivery/order/<order_id>/accept", methods=["POST"])
+@delivery_required
+def delivery_accept_order(order_id: str):
+    order_record = get_order_record_by_order_id(order_id)
+    agent_id = session.get("delivery_agent_id")
+    agent = DeliveryAgent.query.get(agent_id) # type: ignore
+    
+    if not order_record:
+        flash("Order not found.", "warning")
+        return redirect(url_for("delivery_dashboard"))
+        
+    if not agent:
+        flash("Agent session invalid. Please sign in again.", "danger")
+        return redirect(url_for("delivery_login"))
+        
+    if not agent.email_verified or not agent.phone_verified:
+        flash("Action denied: You must verify your email and phone number in your Profile before claiming orders.", "danger")
+        return redirect(url_for("delivery_dashboard"))
+        
+    summary = dict(order_record.summary_json or {})
+    if summary.get("delivery_agent_id"):
+        flash("This order has already been assigned or claimed by another agent.", "warning")
+        return redirect(url_for("delivery_dashboard"))
+        
+    total_price = _safe_float(summary.get("total", 0.0))
+    HIGH_VALUE_THRESHOLD = 1000.0
+    if total_price >= HIGH_VALUE_THRESHOLD and get_agent_rating(agent.id) < 2.0:
+        flash("Your average delivery rating is too low to claim high-value orders.", "danger")
+        return redirect(url_for("delivery_dashboard"))
+        
+    summary["delivery_agent_id"] = agent.id
+    summary["agent_name"] = agent.name
+    summary["agent_phone"] = agent.phone
+    order_record.summary_json = summary
+    db.session.commit() # type: ignore
+    
+    flash(f"You have successfully claimed order {order_id}.", "success")
+    return redirect(url_for("delivery_order_detail", order_id=order_id))
 
 @app.route("/support", methods=["GET", "POST"])
 def support():
@@ -3198,6 +3595,7 @@ def support():
 def account(): # type: ignore
     prune_closed_tickets()
     prune_canceled_orders()
+    auto_verify_pending_payments()
     ensure_catalog_loaded()
     order_records: Any = Order.query.filter_by(user_id=current_user.id).order_by(Order.created_at.desc()).all() # type: ignore
     orders = [order_record_to_payload(o) for o in order_records]
@@ -3214,6 +3612,107 @@ def account(): # type: ignore
                 seen.add(ix.product_id)
                 
     return render_template("account.html", orders=orders, tickets=tickets, wishlist=wishlist)
+
+
+@app.route("/account/profile", methods=["GET", "POST"])
+@login_required # type: ignore
+def account_profile(): # type: ignore
+    form = UserProfileForm(
+        username=current_user.username, # type: ignore
+        email=current_user.email, # type: ignore
+        phone=current_user.phone, # type: ignore
+        profile_pic_url=current_user.profile_pic_url # type: ignore
+    )
+    
+    if form.validate_on_submit():
+        user = User.query.get(current_user.id) # type: ignore
+        
+        if not user:
+            flash("User session invalid. Please sign in again.", "danger")
+            return redirect(url_for("login"))
+        
+        new_email = str(form.email.data or "").strip().lower()
+        new_username = str(form.username.data or "").strip()
+        
+        if new_email != user.email and User.query.filter_by(email=new_email).first(): # type: ignore
+            flash("That email is already registered to another account.", "danger")
+            return redirect(url_for("account_profile"))
+            
+        if new_username != user.username and User.query.filter_by(username=new_username).first(): # type: ignore
+            flash("That username is already taken.", "danger")
+            return redirect(url_for("account_profile"))
+            
+        if user.email != form.email.data: # type: ignore
+            user.email_verified = False # type: ignore
+        if user.phone != form.phone.data: # type: ignore
+            user.phone_verified = False # type: ignore
+            
+        user.username = str(form.username.data or "").strip() # type: ignore
+        user.email = str(form.email.data or "").strip().lower() # type: ignore
+        user.phone = str(form.phone.data or "").strip() # type: ignore
+        user.profile_pic_url = str(form.profile_pic_url.data or "").strip() # type: ignore
+        
+        db.session.commit() # type: ignore
+        flash("Profile updated successfully.", "success")
+        return redirect(url_for("account_profile"))
+        
+    return render_template("profile.html", form=form, target="customer")
+
+
+@app.route("/account/verify/<method>", methods=["GET", "POST"])
+@login_required # type: ignore
+def account_verify(method: str):
+    user = User.query.get(current_user.id) # type: ignore
+    
+    if not user:
+        flash("User session invalid. Please sign in again.", "danger")
+        return redirect(url_for("login"))
+    
+    if method == "send_email":
+        user.current_otp = str(random.randint(100000, 999999)) # type: ignore
+        user.otp_expiry = datetime.utcnow() + timedelta(minutes=10) # type: ignore
+        db.session.commit() # type: ignore
+        threading.Thread(target=send_otp_email_async, args=(user.email, user.current_otp), daemon=True).start() # type: ignore
+        flash("OTP sent to your email address.", "info")
+        return redirect(url_for("account_verify", method="email"))
+        
+    if method == "send_phone":
+        if not user.phone: # type: ignore
+            flash("Please add a phone number to your profile first.", "warning")
+            return redirect(url_for("account_profile"))
+        user.current_otp = str(random.randint(100000, 999999)) # type: ignore
+        user.otp_expiry = datetime.utcnow() + timedelta(minutes=10) # type: ignore
+        db.session.commit() # type: ignore
+        send_otp_sms_mock(user.phone, user.current_otp) # type: ignore
+        flash("OTP sent via SMS (Check server console).", "info")
+        return redirect(url_for("account_verify", method="phone"))
+
+    form = OTPForm()
+    if form.validate_on_submit():
+        if not user.current_otp or not user.otp_expiry or datetime.utcnow() > user.otp_expiry: # type: ignore
+            flash("OTP expired. Please request a new one.", "danger")
+            return redirect(url_for("account_verify", method=method))
+            
+        if str(form.otp.data) == str(user.current_otp): # type: ignore
+            user.current_otp = None # type: ignore
+            user.otp_expiry = None # type: ignore
+            if method == "email":
+                user.email_verified = True # type: ignore
+                flash("Email verified successfully!", "success")
+            elif method == "phone":
+                user.phone_verified = True # type: ignore
+                flash("Phone verified successfully!", "success")
+            db.session.commit() # type: ignore
+            return redirect(url_for("account_profile"))
+        else:
+            flash("Invalid OTP. Try again.", "danger")
+            
+    return render_template(
+        "verify_otp.html", 
+        form=form, 
+        method=method, 
+        target_url=url_for("account_verify", method=method)
+    )
 
 
 @app.route("/order/<order_id>/invoice")
@@ -3270,6 +3769,89 @@ def prune_canceled_orders() -> None:
             db.session.delete(o) # type: ignore
     db.session.commit() # type: ignore
 
+def get_agent_rating(agent_id: int) -> float:
+    """Calculate an agent's average rating based on past deliveries."""
+    delivered_orders: Any = Order.query.filter_by(status="delivered").all() # type: ignore
+    ratings = []
+    for o in delivered_orders:
+        summary = dict(o.summary_json or {})
+        if str(summary.get("delivery_agent_id", "")) == str(agent_id):
+            if "delivery_rating" in summary:
+                rating_val = _safe_float(summary["delivery_rating"], -1.0)
+                if rating_val >= 0:
+                    ratings.append(rating_val)
+    if not ratings:
+        return 5.0
+    return sum(ratings) / len(ratings)
+
+def auto_assign_pending_orders() -> None:
+    """Assigns unassigned orders to agents if they have been waiting > 5 mins."""
+    cutoff = datetime.utcnow() - timedelta(minutes=5)
+    unassigned_orders: Any = Order.query.filter(Order.status.in_(["processing", "shipped"])).all() # type: ignore
+    active_agents: Any = DeliveryAgent.query.filter_by(active=True).all() # type: ignore
+    
+    if not active_agents:
+        return
+        
+    # PERFORMANCE FIX: Pre-calculate ratings and loads to prevent N+1 DB Timeout Crashes!
+    agent_ratings = {a.id: get_agent_rating(a.id) for a in active_agents}
+    active_orders: Any = Order.query.filter(Order.status.in_(["processing", "shipped", "out_for_delivery"])).all() # type: ignore
+    base_agent_loads = {a.id: 0 for a in active_agents}
+    
+    for act_o in active_orders:
+        if act_o.summary_json:
+            assigned_id = act_o.summary_json.get("delivery_agent_id")
+            if assigned_id in base_agent_loads:
+                base_agent_loads[assigned_id] += 1
+                
+    dirty = False
+    for o in unassigned_orders:
+        summary = dict(o.summary_json or {})
+        if not summary.get("delivery_agent_id") and hasattr(o, "created_at") and o.created_at and o.created_at < cutoff:
+            total_price = _safe_float(summary.get("total", 0.0))
+            HIGH_VALUE_THRESHOLD = 1000.0
+            
+            eligible_agents = [
+                a for a in active_agents 
+                if not (total_price >= HIGH_VALUE_THRESHOLD and agent_ratings[a.id] < 2.0)
+            ]
+            
+            if not eligible_agents:
+                continue
+                
+            best_agent_id = min(eligible_agents, key=lambda a: base_agent_loads[a.id]).id
+            best_agent = next(a for a in eligible_agents if a.id == best_agent_id)
+            
+            summary["delivery_agent_id"] = best_agent.id
+            summary["agent_name"] = best_agent.name
+            summary["agent_phone"] = best_agent.phone
+            o.summary_json = summary
+            dirty = True
+            
+            # Increment load so the next unassigned order goes to someone else
+            base_agent_loads[best_agent_id] += 1
+            
+    if dirty:
+        db.session.commit() # type: ignore
+
+def auto_verify_pending_payments() -> None:
+    """Hybrid model: Simulates a payment gateway webhook verifying UPI/Bank transfers after 1 minute."""
+    cutoff = datetime.utcnow() - timedelta(minutes=1)
+    pending_orders: Any = Order.query.filter_by(status="pending_payment").all() # type: ignore
+    
+    dirty = False
+    for o in pending_orders:
+        if getattr(o, "payment_gateway", "") == "manual" and getattr(o, "payment_method_id", "") in ["upi", "netbanking"]:
+            if hasattr(o, "created_at") and o.created_at and o.created_at < cutoff:
+                o.status = "processing"
+                o.payment_status = f"Auto-verified ({o.payment_method_id.upper()})"
+                dirty = True
+                
+                order_payload = order_record_to_payload(o)
+                send_status_update_email(order_payload, order_payload["customer"]["email"], "processing")
+                
+    if dirty:
+        db.session.commit() # type: ignore
 
 if __name__ == "__main__":
     from data.generate_dataset import create_interactions, create_products
@@ -3302,4 +3884,4 @@ if __name__ == "__main__":
         db.create_all() # type: ignore
         init_recommenders(force_reload=True)
 
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)

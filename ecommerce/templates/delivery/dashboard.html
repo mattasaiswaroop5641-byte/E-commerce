@@ -3,11 +3,14 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="h3 mb-0">Active Deliveries</h2>
     {% if agent %}
-    <form action="{{ url_for('delivery_toggle_status') }}" method="POST" class="m-0">
-        <button type="submit" class="btn {{ 'btn-success' if agent.active else 'btn-secondary' }} btn-sm fw-bold shadow-sm">
-            <i class="bi {{ 'bi-check-circle' if agent.active else 'bi-pause-circle' }} me-1"></i> {{ 'On Duty' if agent.active else 'Off Duty' }}
-        </button>
-    </form>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('delivery_profile') }}" class="btn btn-outline-secondary btn-sm shadow-sm"><i class="bi bi-person"></i> Profile</a>
+        <form action="{{ url_for('delivery_toggle_status') }}" method="POST" class="m-0">
+            <button type="submit" class="btn {{ 'btn-success' if agent.active else 'btn-secondary' }} btn-sm fw-bold shadow-sm">
+                <i class="bi {{ 'bi-check-circle' if agent.active else 'bi-pause-circle' }} me-1"></i> {{ 'On Duty' if agent.active else 'Off Duty' }}
+            </button>
+        </form>
+    </div>
     {% endif %}
 </div>
 <div class="row mb-4">
@@ -34,6 +37,33 @@
         </div>
     </div>
 </div>
+
+<!-- Open Pool: Unassigned Orders -->
+{% if unassigned_orders and agent.active %}
+<div class="mb-4">
+    <h3 class="h5 fw-bold mb-3"><i class="bi bi-inbox text-primary me-2"></i> Available Orders (Open Pool)</h3>
+    <div class="row g-3">
+        {% for order in unassigned_orders %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card border-primary h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h6 class="mb-0 fw-bold">{{ order.order_id }}</h6>
+                        <span class="badge bg-primary">New</span>
+                    </div>
+                    <p class="small text-muted mb-3"><i class="bi bi-geo-alt"></i> {{ order.customer_city }}, {{ order.customer_postal_code }}</p>
+                    
+                    <form action="{{ url_for('delivery_accept_order', order_id=order.order_id) }}" method="POST">
+                        <button type="submit" class="btn btn-primary btn-sm w-100">Claim Order</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <div class="row">
     <div class="col-md-12 mb-4">
         <div class="card border-0 shadow-sm">
@@ -87,18 +117,11 @@
                     currentMain.innerHTML = newMain.innerHTML;
                     
                     // Play a soft notification chime for the agent!
-                    const chime = new Audio('https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3');
+                    const chime = new Audio('/static/audio/notification.mp3');
                     chime.play().catch(e => console.log("Audio play blocked by browser until user interacts with the page"));
                 }
             })
             .catch(err => console.error("Polling error:", err));
     }, 10000); // 10000 milliseconds = 10 seconds
-</script>
-
-<script>
-    // Auto-refresh the dashboard every 30 seconds to stay in sync with real-time assignments
-    setTimeout(function() {
-        window.location.reload();
-    }, 30000);
 </script>
 {% endblock %}

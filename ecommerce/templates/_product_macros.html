@@ -75,7 +75,7 @@
 
         <div class="product-utility">
             <span>{{ product.delivery_text }}</span>
-            <span>{{ product.stock_text }}</span>
+            <span class="{% if not product.can_buy %}text-danger fw-bold{% elif 'Only' in product.stock_text %}text-warning fw-bold{% endif %}">{{ product.stock_text }}</span>
         </div>
 
         <div class="product-actions product-actions--catalog">
@@ -84,8 +84,8 @@
             </a>
             <form action="{{ url_for('add_to_cart', product_id=target_product_id) }}" method="post" class="product-actions__form">
                 <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
-                <button class="btn btn-outline-secondary" type="submit">
-                    {% if product.variant_count > 1 %}Add default{% else %}Add to cart{% endif %}
+                <button class="btn btn-outline-secondary" type="submit" {% if not product.can_buy %}disabled{% endif %}>
+                    {% if not product.can_buy %}Sold out{% elif product.variant_count > 1 %}Add default{% else %}Add to cart{% endif %}
                 </button>
             </form>
             {% if show_save and current_user.is_authenticated %}

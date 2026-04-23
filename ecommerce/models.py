@@ -12,6 +12,12 @@ class User(UserMixin, db.Model):
     username: str = db.Column(db.String(150), unique=True, nullable=False)
     email: str = db.Column(db.String(150), unique=True, nullable=False)
     password_hash: str = db.Column(db.String(128), nullable=False)
+    phone: str = db.Column(db.String(40), nullable=False, default="")
+    profile_pic_url: str = db.Column(db.String(500), nullable=False, default="")
+    email_verified: bool = db.Column(db.Boolean, nullable=False, default=False)
+    phone_verified: bool = db.Column(db.Boolean, nullable=False, default=False)
+    current_otp: str = db.Column(db.String(6), nullable=True)
+    otp_expiry: datetime = db.Column(db.DateTime, nullable=True)
     interactions: "List[Interaction]"
     orders: "List[Order]"
     support_tickets: "List[SupportTicket]"
@@ -239,6 +245,11 @@ class DeliveryAgent(db.Model):
     email: str = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash: str = db.Column(db.String(256), nullable=False)
     active: bool = db.Column(db.Boolean, default=True, index=True)
+    profile_pic_url: str = db.Column(db.String(500), nullable=False, default="")
+    email_verified: bool = db.Column(db.Boolean, nullable=False, default=False)
+    phone_verified: bool = db.Column(db.Boolean, nullable=False, default=False)
+    current_otp: str = db.Column(db.String(6), nullable=True)
+    otp_expiry: datetime = db.Column(db.DateTime, nullable=True)
     created_at: datetime = db.Column(db.DateTime, default=db.func.current_timestamp())
 
     def set_password(self, password: str) -> None:

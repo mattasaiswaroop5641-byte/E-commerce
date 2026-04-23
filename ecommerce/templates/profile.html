@@ -1,0 +1,63 @@
+{% extends "delivery/base.html" if target == 'agent' else "base.html" %}
+
+{% block content %}
+<div class="container-xxl py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-sm border-0 rounded-4">
+                <div class="card-body p-4 p-md-5">
+                    <div class="text-center mb-4">
+                        {% set pic_url = form.profile_pic_url.data if form.profile_pic_url.data else 'https://ui-avatars.com/api/?background=random&name=' + (form.name.data if target == 'agent' else form.username.data) %}
+                        <img src="{{ pic_url }}" alt="Avatar" class="rounded-circle mb-3 border shadow-sm" style="width: 120px; height: 120px; object-fit: cover;">
+                        <h2 class="fw-bold">My Profile</h2>
+                        <p class="text-muted">Manage your personal information and verifications.</p>
+                    </div>
+
+                    <form method="POST">
+                        {{ form.hidden_tag() }}
+                        
+                        <div class="mb-3">
+                            {{ form.name.label(class="form-label fw-bold") if target == 'agent' else form.username.label(class="form-label fw-bold") }}
+                            {{ form.name(class="form-control form-control-lg") if target == 'agent' else form.username(class="form-control form-control-lg") }}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Email Address</label>
+                            <div class="input-group">
+                                {{ form.email(class="form-control form-control-lg") }}
+                                {% set user_obj = agent if target == 'agent' else current_user %}
+                                {% if user_obj.email_verified %}
+                                    <span class="input-group-text bg-success text-white"><i class="bi bi-shield-check me-1"></i> Verified</span>
+                                {% else %}
+                                    <a href="{{ url_for('delivery_verify' if target == 'agent' else 'account_verify', method='send_email') }}" class="btn btn-warning"><i class="bi bi-envelope"></i> Verify</a>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Phone Number</label>
+                            <div class="input-group">
+                                {{ form.phone(class="form-control form-control-lg", placeholder="Add phone to verify...") }}
+                                {% set user_obj = agent if target == 'agent' else current_user %}
+                                {% if user_obj.phone_verified %}
+                                    <span class="input-group-text bg-success text-white"><i class="bi bi-shield-check me-1"></i> Verified</span>
+                                {% elif user_obj.phone %}
+                                    <a href="{{ url_for('delivery_verify' if target == 'agent' else 'account_verify', method='send_phone') }}" class="btn btn-warning"><i class="bi bi-phone"></i> Verify</a>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            {{ form.profile_pic_url.label(class="form-label fw-bold") }}
+                            {{ form.profile_pic_url(class="form-control", placeholder="https://example.com/my-photo.jpg") }}
+                            <small class="text-muted">Leave blank for auto-generated avatar.</small>
+                        </div>
+
+                        {{ form.submit(class="btn btn-dark btn-lg w-100") }}
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
