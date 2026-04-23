@@ -148,6 +148,37 @@ def ensure_runtime_schema() -> None:
             if "otp_expiry" not in agent_cols:
                 add_column("delivery_agent", "otp_expiry TIMESTAMP")
 
+            # Ensure password_hash columns are wide enough to store modern password hashes.
+            try:
+                if is_postgres:
+                    # Widen `user.password_hash` to TEXT if it's a VARCHAR.
+                    try:
+                        user_cols_info = inspector.get_columns("user")
+                        for col in user_cols_info:
+                            if str(col.get("name") or "") == "password_hash":
+                                col_type = str(col.get("type") or "").lower()
+                                if "varchar" in col_type:
+                                    conn.execute(text('ALTER TABLE "user" ALTER COLUMN password_hash TYPE TEXT'))
+                                    app.logger.info("Patched user.password_hash to TEXT (was %s)", col_type)
+                                break
+                    except Exception:
+                        app.logger.exception("Failed to inspect/alter user.password_hash")
+
+                    # Widen `delivery_agent.password_hash` to TEXT if it's a VARCHAR.
+                    try:
+                        agent_cols_info = inspector.get_columns("delivery_agent")
+                        for col in agent_cols_info:
+                            if str(col.get("name") or "") == "password_hash":
+                                col_type = str(col.get("type") or "").lower()
+                                if "varchar" in col_type:
+                                    conn.execute(text('ALTER TABLE "delivery_agent" ALTER COLUMN password_hash TYPE TEXT'))
+                                    app.logger.info("Patched delivery_agent.password_hash to TEXT (was %s)", col_type)
+                                break
+                    except Exception:
+                        app.logger.exception("Failed to inspect/alter delivery_agent.password_hash")
+            except Exception:
+                app.logger.exception("Failed to widen password_hash columns")
+
     except Exception:
         app.logger.exception("Schema bootstrap failed (continuing without schema patch).")
 
