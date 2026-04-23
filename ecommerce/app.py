@@ -1008,49 +1008,13 @@ def init_recommenders(force_reload: bool = False) -> None:
     if catalog_ready and not force_reload:
         return
 
-    # Allow disabling recommender/catalog initialization on low-memory or
-    # free-tier hosts to avoid worker OOMs and slow startup. Set
-    # `SKIP_INIT_RECOMMENDERS=true` in the environment to opt out.
-    if str(os.environ.get("SKIP_INIT_RECOMMENDERS", "")).strip().lower() in {"1", "true", "yes"}:
-        # Create an empty DataFrame with the columns other code expects so
-        # callers can safely query columns like 'product_id' or 'brand'. This
-        # avoids KeyError when the catalog initialization is intentionally
-        # skipped on low-memory hosts.
-        cols = [
-            "product_id",
-            "product_family_id",
-            "name",
-            "price",
-            "category",
-            "subcategory",
-            "brand",
-            "description",
-            "variant_type",
-            "variant_value",
-            "variant_label",
-            "is_default",
-            "thumb_image_url",
-            "hero_image_url",
-            "image_url",
-            "active",
-        ]
-        products_df = pd.DataFrame(columns=cols)
-        # Explicit nullable/empty dtypes for numeric/boolean columns to avoid
-        # surprises when code performs numeric operations.
-        products_df["product_id"] = pd.Series(dtype="Int64")
-        products_df["price"] = pd.Series(dtype="float64")
-        products_df["is_default"] = pd.Series(dtype="boolean")
-        products_df["active"] = pd.Series(dtype="boolean")
-
-        family_rows_by_id = {}
-        family_cards_by_id = {}
-        category_cards_cache = []
-        catalog_stats = {"product_count": 0, "family_count": 0, "category_count": 0}
-        cb_recommender = None
-        collab_recommender = None
-        catalog_ready = True
-        app.logger.info("init_recommenders skipped due to SKIP_INIT_RECOMMENDERS=true")
-        return
+    # Allow disabling heavy recommender training on low-memory or free-tier
+    # hosts while still loading the product catalog (if present). When
+    # `SKIP_INIT_RECOMMENDERS` is set, the CSV/catalog is loaded but the
+    # expensive TF-IDF / collaborative training steps are skipped.
+    skip_init_recommenders = str(os.environ.get("SKIP_INIT_RECOMMENDERS", "")).strip().lower() in {"1", "true", "yes"}
+    if skip_init_recommenders:
+        app.logger.info("SKIP_INIT_RECOMMENDERS=true; catalog will be loaded but recommender training will be skipped")
 
     _product_sales_cache = {}
     try:
@@ -1213,11 +1177,23 @@ def init_recommenders(force_reload: bool = False) -> None:
         "category_count": int(products_df["category"].nunique()), # type: ignore
     }
 
-    cb_recommender = ContentRecommender()
-    cb_recommender.fit()
+    # Initialize content recommender. Training is potentially expensive;
+    # when `SKIP_INIT_RECOMMENDERS` is set we avoid fitting the model.
+    if not skip_init_recommenders:
+        cb_recommender = ContentRecommender()
+        def _fit_cb():
+            try:
+                cb_recommender.fit()
+                app.logger.info("Content recommender training completed")
+            except Exception:
+                app.logger.exception("Content recommender training failed")
+
+        threading.Thread(target=_fit_cb, daemon=True).start()
+    else:
+        cb_recommender = None
 
     interactions_path = os.path.join(os.path.dirname(__file__), "data", "interactions.csv")
-    if os.path.exists(interactions_path):
+    if os.path.exists(interactions_path) and not skip_init_recommenders:
         collab_recommender = CollabRecommender(n_components=10)
         # Lazy load collab model - don't train on startup to prevent timeout
     else:
