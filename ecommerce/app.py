@@ -1008,6 +1008,21 @@ def init_recommenders(force_reload: bool = False) -> None:
     if catalog_ready and not force_reload:
         return
 
+    # Allow disabling recommender/catalog initialization on low-memory or
+    # free-tier hosts to avoid worker OOMs and slow startup. Set
+    # `SKIP_INIT_RECOMMENDERS=true` in the environment to opt out.
+    if str(os.environ.get("SKIP_INIT_RECOMMENDERS", "")).strip().lower() in {"1", "true", "yes"}:
+        products_df = pd.DataFrame()
+        family_rows_by_id = {}
+        family_cards_by_id = {}
+        category_cards_cache = []
+        catalog_stats = {"product_count": 0, "family_count": 0, "category_count": 0}
+        cb_recommender = None
+        collab_recommender = None
+        catalog_ready = True
+        app.logger.info("init_recommenders skipped due to SKIP_INIT_RECOMMENDERS=true")
+        return
+
     _product_sales_cache = {}
     try:
         all_orders = Order.query.filter(Order.status != "canceled").all() # type: ignore
