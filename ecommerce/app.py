@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 
 from admin_forms import AdminDiscountForm, AdminLoginForm, AdminOrderStatusForm, AdminProductForm, AdminTicketUpdateForm, DeliveryLoginForm, DeliveryStatusForm, DeliverySignupForm, AgentProfileForm
 from forms import LoginForm, SignupForm, UserProfileForm, OTPForm
@@ -70,27 +70,36 @@ def initialize_database():
         
         # --- FIX 1: Auto-migrate PostgreSQL tables on Render to prevent 500 errors ---
         try:
+            insp = inspect(db.engine)
             with db.engine.connect() as conn:
-                # Force migration safely one-by-one using isolated transactions
-                statements = [
-                    'ALTER TABLE "user" ADD COLUMN phone VARCHAR(40) DEFAULT \'\';',
-                    'ALTER TABLE "user" ADD COLUMN profile_pic_url VARCHAR(500) DEFAULT \'\';',
-                    'ALTER TABLE "user" ADD COLUMN email_verified BOOLEAN DEFAULT FALSE;',
-                    'ALTER TABLE "user" ADD COLUMN phone_verified BOOLEAN DEFAULT FALSE;',
-                    'ALTER TABLE "user" ADD COLUMN current_otp VARCHAR(6);',
-                    'ALTER TABLE "user" ADD COLUMN otp_expiry TIMESTAMP;',
-                    'ALTER TABLE delivery_agent ADD COLUMN profile_pic_url VARCHAR(500) DEFAULT \'\';',
-                    'ALTER TABLE delivery_agent ADD COLUMN email_verified BOOLEAN DEFAULT FALSE;',
-                    'ALTER TABLE delivery_agent ADD COLUMN phone_verified BOOLEAN DEFAULT FALSE;',
-                    'ALTER TABLE delivery_agent ADD COLUMN current_otp VARCHAR(6);',
-                    'ALTER TABLE delivery_agent ADD COLUMN otp_expiry TIMESTAMP;'
-                ]
-                for stmt in statements:
-                    try:
+                if insp.has_table("user"):
+                    cols = [c["name"] for c in insp.get_columns("user")]
+                    statements = []
+                    if "phone" not in cols: statements.append('ALTER TABLE "user" ADD COLUMN phone VARCHAR(40) DEFAULT \'\'')
+                    if "profile_pic_url" not in cols: statements.append('ALTER TABLE "user" ADD COLUMN profile_pic_url VARCHAR(500) DEFAULT \'\'')
+                    if "email_verified" not in cols: statements.append('ALTER TABLE "user" ADD COLUMN email_verified BOOLEAN DEFAULT FALSE')
+                    if "phone_verified" not in cols: statements.append('ALTER TABLE "user" ADD COLUMN phone_verified BOOLEAN DEFAULT FALSE')
+                    if "current_otp" not in cols: statements.append('ALTER TABLE "user" ADD COLUMN current_otp VARCHAR(6)')
+                    if "otp_expiry" not in cols: statements.append('ALTER TABLE "user" ADD COLUMN otp_expiry TIMESTAMP')
+                    
+                    if statements:
                         with conn.begin():
-                            conn.execute(text(stmt))
-                    except Exception:
-                        pass  # Ignore if column already exists
+                            for stmt in statements:
+                                conn.execute(text(stmt))
+
+                if insp.has_table("delivery_agent"):
+                    cols = [c["name"] for c in insp.get_columns("delivery_agent")]
+                    statements = []
+                    if "profile_pic_url" not in cols: statements.append('ALTER TABLE delivery_agent ADD COLUMN profile_pic_url VARCHAR(500) DEFAULT \'\'')
+                    if "email_verified" not in cols: statements.append('ALTER TABLE delivery_agent ADD COLUMN email_verified BOOLEAN DEFAULT FALSE')
+                    if "phone_verified" not in cols: statements.append('ALTER TABLE delivery_agent ADD COLUMN phone_verified BOOLEAN DEFAULT FALSE')
+                    if "current_otp" not in cols: statements.append('ALTER TABLE delivery_agent ADD COLUMN current_otp VARCHAR(6)')
+                    if "otp_expiry" not in cols: statements.append('ALTER TABLE delivery_agent ADD COLUMN otp_expiry TIMESTAMP')
+                    
+                    if statements:
+                        with conn.begin():
+                            for stmt in statements:
+                                conn.execute(text(stmt))
         except Exception as e:
             app.logger.warning(f"Auto-migration skipped: {e}")
 
