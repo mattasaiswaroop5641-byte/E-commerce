@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash
+from werkzeug.exceptions import HTTPException
 from sqlalchemy import text, inspect
 
 from admin_forms import AdminDiscountForm, AdminLoginForm, AdminOrderStatusForm, AdminProductForm, AdminTicketUpdateForm, DeliveryLoginForm, DeliveryStatusForm, DeliverySignupForm, AgentProfileForm
@@ -58,52 +59,106 @@ login_manager.login_view = "login" # type: ignore
 _db_initialized = False
 _mail_config_logged = False
 _admin_config_logged = False
+_db_config_logged = False
 _admin_failed_attempts: dict[str, list[float]] = {}
+
+def log_database_configuration_once() -> None:
+    global _db_config_logged
+    if _db_config_logged:
+        return
+    _db_config_logged = True
+
+    uri = str(app.config.get("SQLALCHEMY_DATABASE_URI", "") or "").strip()
+    if not uri:
+        app.logger.warning("Database configured: <empty SQLALCHEMY_DATABASE_URI>")
+        return
+
+    if uri.startswith("sqlite:"):
+        app.logger.info("Database configured: SQLite (%s)", uri)
+        return
+
+    try:
+        parsed = urllib.parse.urlparse(uri)
+        host = str(parsed.hostname or "").strip() or "<unknown-host>"
+        port = f":{parsed.port}" if parsed.port else ""
+        db_name = (parsed.path or "").lstrip("/") or "<unknown-db>"
+        app.logger.info("Database configured: %s (host=%s%s db=%s)", parsed.scheme, host, port, db_name)
+    except Exception:
+        app.logger.info("Database configured: %s", uri.split("@")[-1])
+
+
+def ensure_runtime_schema() -> None:
+    """Best-effort schema patching for small incremental model changes.
+
+    This project intentionally avoids Alembic migrations. To prevent production 500s after
+    adding new columns to existing tables, we patch the schema at boot if columns are missing.
+    """
+    try:
+        with db.engine.begin() as conn: # type: ignore[attr-defined]
+            inspector = inspect(conn)
+            dialect = str(getattr(conn.dialect, "name", "") or "").lower()
+            is_postgres = dialect.startswith("postgres")
+
+            def existing_columns(table_name: str) -> set[str]:
+                return {str(col.get("name") or "") for col in inspector.get_columns(table_name)}
+
+            def add_column(table_name: str, column_sql: str) -> None:
+                # Column/table names are constant strings inside this function.
+                if is_postgres:
+                    conn.execute(text(f'ALTER TABLE "{table_name}" ADD COLUMN IF NOT EXISTS {column_sql}'))
+                else:
+                    conn.execute(text(f'ALTER TABLE "{table_name}" ADD COLUMN {column_sql}'))
+
+            # Customer verification/profile columns (added April 2026).
+            user_cols = existing_columns("user")
+            if "profile_pic_url" not in user_cols:
+                add_column("user", "profile_pic_url VARCHAR(500) NOT NULL DEFAULT ''")
+            if "email_verified" not in user_cols:
+                add_column("user", f"email_verified BOOLEAN NOT NULL DEFAULT {'FALSE' if is_postgres else '0'}")
+            if "phone_verified" not in user_cols:
+                add_column("user", f"phone_verified BOOLEAN NOT NULL DEFAULT {'FALSE' if is_postgres else '0'}")
+            if "current_otp" not in user_cols:
+                add_column("user", "current_otp VARCHAR(6)")
+            if "otp_expiry" not in user_cols:
+                add_column("user", "otp_expiry TIMESTAMP")
+
+            # Delivery agent verification/profile columns (added April 2026).
+            agent_cols = existing_columns("delivery_agent")
+            if "profile_pic_url" not in agent_cols:
+                add_column("delivery_agent", "profile_pic_url VARCHAR(500) NOT NULL DEFAULT ''")
+            if "email_verified" not in agent_cols:
+                add_column("delivery_agent", f"email_verified BOOLEAN NOT NULL DEFAULT {'FALSE' if is_postgres else '0'}")
+            if "phone_verified" not in agent_cols:
+                add_column("delivery_agent", f"phone_verified BOOLEAN NOT NULL DEFAULT {'FALSE' if is_postgres else '0'}")
+            if "current_otp" not in agent_cols:
+                add_column("delivery_agent", "current_otp VARCHAR(6)")
+            if "otp_expiry" not in agent_cols:
+                add_column("delivery_agent", "otp_expiry TIMESTAMP")
+
+    except Exception:
+        app.logger.exception("Schema bootstrap failed (continuing without schema patch).")
+
 
 @app.before_request
 def initialize_database():
     global _db_initialized
     if not _db_initialized:
+        log_database_configuration_once()
         log_mail_configuration_once()
         log_admin_configuration_once()
         db.create_all() # type: ignore
-        
-        # --- FIX 1: Auto-migrate PostgreSQL tables on Render to prevent 500 errors ---
-        try:
-            insp = inspect(db.engine)
-            with db.engine.connect() as conn:
-                if insp.has_table("user"):
-                    cols = [c["name"] for c in insp.get_columns("user")]
-                    statements = []
-                    if "phone" not in cols: statements.append('ALTER TABLE "user" ADD COLUMN phone VARCHAR(40) DEFAULT \'\'')
-                    if "profile_pic_url" not in cols: statements.append('ALTER TABLE "user" ADD COLUMN profile_pic_url VARCHAR(500) DEFAULT \'\'')
-                    if "email_verified" not in cols: statements.append('ALTER TABLE "user" ADD COLUMN email_verified BOOLEAN DEFAULT FALSE')
-                    if "phone_verified" not in cols: statements.append('ALTER TABLE "user" ADD COLUMN phone_verified BOOLEAN DEFAULT FALSE')
-                    if "current_otp" not in cols: statements.append('ALTER TABLE "user" ADD COLUMN current_otp VARCHAR(6)')
-                    if "otp_expiry" not in cols: statements.append('ALTER TABLE "user" ADD COLUMN otp_expiry TIMESTAMP')
-                    
-                    if statements:
-                        with conn.begin():
-                            for stmt in statements:
-                                conn.execute(text(stmt))
-
-                if insp.has_table("delivery_agent"):
-                    cols = [c["name"] for c in insp.get_columns("delivery_agent")]
-                    statements = []
-                    if "profile_pic_url" not in cols: statements.append('ALTER TABLE delivery_agent ADD COLUMN profile_pic_url VARCHAR(500) DEFAULT \'\'')
-                    if "email_verified" not in cols: statements.append('ALTER TABLE delivery_agent ADD COLUMN email_verified BOOLEAN DEFAULT FALSE')
-                    if "phone_verified" not in cols: statements.append('ALTER TABLE delivery_agent ADD COLUMN phone_verified BOOLEAN DEFAULT FALSE')
-                    if "current_otp" not in cols: statements.append('ALTER TABLE delivery_agent ADD COLUMN current_otp VARCHAR(6)')
-                    if "otp_expiry" not in cols: statements.append('ALTER TABLE delivery_agent ADD COLUMN otp_expiry TIMESTAMP')
-                    
-                    if statements:
-                        with conn.begin():
-                            for stmt in statements:
-                                conn.execute(text(stmt))
-        except Exception as e:
-            app.logger.warning(f"Auto-migration skipped: {e}")
+        ensure_runtime_schema()
 
         _db_initialized = True
+
+
+@app.errorhandler(Exception)
+def handle_unhandled_exception(exc: Exception):
+    if isinstance(exc, HTTPException):
+        return exc
+    error_id = uuid4().hex[:10]
+    app.logger.exception("Unhandled exception [%s] on %s %s", error_id, request.method, request.path)
+    return render_template("500.html", error_id=error_id), 500
 
 SITE_NAME = "ShadowMarket"
 PLACEHOLDER_IMAGE_PATH = "/static/images/product-placeholder.svg"
