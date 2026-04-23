@@ -43,7 +43,12 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "your-secret-key-here-change-in-production")
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///site.db")
+
+# --- FIX: Automatically fix Neon's postgres:// prefix and bypass stale SQLite files ---
+db_url = os.environ.get("DATABASE_URL", "sqlite:///shadowmarket_live.db")
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app) # type: ignore
@@ -65,8 +70,9 @@ def initialize_database():
         
         # --- FIX 1: Auto-migrate PostgreSQL tables on Render to prevent 500 errors ---
         try:
-            with db.engine.begin() as conn:
-                # Force migration for ALL database types (SQLite and PostgreSQL) safely one-by-one
+            with db.engine.connect() as conn:
+                conn = conn.execution_options(isolation_level="AUTOCOMMIT")
+                # Force migration safely one-by-one without aborting Postgres transactions
                 statements = [
                     'ALTER TABLE "user" ADD COLUMN phone VARCHAR(40) DEFAULT \'\';',
                     'ALTER TABLE "user" ADD COLUMN profile_pic_url VARCHAR(500) DEFAULT \'\';',
