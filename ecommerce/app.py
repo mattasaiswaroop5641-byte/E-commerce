@@ -1012,7 +1012,36 @@ def init_recommenders(force_reload: bool = False) -> None:
     # free-tier hosts to avoid worker OOMs and slow startup. Set
     # `SKIP_INIT_RECOMMENDERS=true` in the environment to opt out.
     if str(os.environ.get("SKIP_INIT_RECOMMENDERS", "")).strip().lower() in {"1", "true", "yes"}:
-        products_df = pd.DataFrame()
+        # Create an empty DataFrame with the columns other code expects so
+        # callers can safely query columns like 'product_id' or 'brand'. This
+        # avoids KeyError when the catalog initialization is intentionally
+        # skipped on low-memory hosts.
+        cols = [
+            "product_id",
+            "product_family_id",
+            "name",
+            "price",
+            "category",
+            "subcategory",
+            "brand",
+            "description",
+            "variant_type",
+            "variant_value",
+            "variant_label",
+            "is_default",
+            "thumb_image_url",
+            "hero_image_url",
+            "image_url",
+            "active",
+        ]
+        products_df = pd.DataFrame(columns=cols)
+        # Explicit nullable/empty dtypes for numeric/boolean columns to avoid
+        # surprises when code performs numeric operations.
+        products_df["product_id"] = pd.Series(dtype="Int64")
+        products_df["price"] = pd.Series(dtype="float64")
+        products_df["is_default"] = pd.Series(dtype="boolean")
+        products_df["active"] = pd.Series(dtype="boolean")
+
         family_rows_by_id = {}
         family_cards_by_id = {}
         category_cards_cache = []
