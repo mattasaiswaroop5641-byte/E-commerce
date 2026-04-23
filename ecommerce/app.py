@@ -1066,7 +1066,34 @@ def init_recommenders(force_reload: bool = False) -> None:
 
     csv_path = os.path.join(os.path.dirname(__file__), "data", "products.csv")
     if not os.path.exists(csv_path):
-        products_df = pd.DataFrame()
+        # If the products CSV is missing (e.g., not included in the runtime
+        # container), create an empty DataFrame with the columns other code
+        # expects so template/context injection won't crash when accessing
+        # `product_id`, `price`, etc.
+        cols = [
+            "product_id",
+            "product_family_id",
+            "name",
+            "price",
+            "category",
+            "subcategory",
+            "brand",
+            "description",
+            "variant_type",
+            "variant_value",
+            "variant_label",
+            "is_default",
+            "thumb_image_url",
+            "hero_image_url",
+            "image_url",
+            "active",
+        ]
+        products_df = pd.DataFrame(columns=cols)
+        products_df["product_id"] = pd.Series(dtype="Int64")
+        products_df["price"] = pd.Series(dtype="float64")
+        products_df["is_default"] = pd.Series(dtype="boolean")
+        products_df["active"] = pd.Series(dtype="boolean")
+
         family_rows_by_id = {}
         family_cards_by_id = {}
         category_cards_cache = []
@@ -1074,6 +1101,7 @@ def init_recommenders(force_reload: bool = False) -> None:
         cb_recommender = None
         collab_recommender = None
         catalog_ready = True
+        app.logger.warning("products.csv not found; catalog initialized empty")
         return
 
     products_df = pd.read_csv(csv_path).fillna("")
