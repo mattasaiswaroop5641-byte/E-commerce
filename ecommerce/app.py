@@ -66,19 +66,25 @@ def initialize_database():
         # --- FIX 1: Auto-migrate PostgreSQL tables on Render to prevent 500 errors ---
         try:
             with db.engine.begin() as conn:
-                if "postgres" in app.config["SQLALCHEMY_DATABASE_URI"]:
-                    conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS phone VARCHAR(40) DEFAULT \'\';'))
-                    conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS profile_pic_url VARCHAR(500) DEFAULT \'\';'))
-                    conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;'))
-                    conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN DEFAULT FALSE;'))
-                    conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS current_otp VARCHAR(6);'))
-                    conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS otp_expiry TIMESTAMP WITHOUT TIME ZONE;'))
-                    
-                    conn.execute(text('ALTER TABLE delivery_agent ADD COLUMN IF NOT EXISTS profile_pic_url VARCHAR(500) DEFAULT \'\';'))
-                    conn.execute(text('ALTER TABLE delivery_agent ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;'))
-                    conn.execute(text('ALTER TABLE delivery_agent ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN DEFAULT FALSE;'))
-                    conn.execute(text('ALTER TABLE delivery_agent ADD COLUMN IF NOT EXISTS current_otp VARCHAR(6);'))
-                    conn.execute(text('ALTER TABLE delivery_agent ADD COLUMN IF NOT EXISTS otp_expiry TIMESTAMP WITHOUT TIME ZONE;'))
+                # Force migration for ALL database types (SQLite and PostgreSQL) safely one-by-one
+                statements = [
+                    'ALTER TABLE "user" ADD COLUMN phone VARCHAR(40) DEFAULT \'\';',
+                    'ALTER TABLE "user" ADD COLUMN profile_pic_url VARCHAR(500) DEFAULT \'\';',
+                    'ALTER TABLE "user" ADD COLUMN email_verified BOOLEAN DEFAULT FALSE;',
+                    'ALTER TABLE "user" ADD COLUMN phone_verified BOOLEAN DEFAULT FALSE;',
+                    'ALTER TABLE "user" ADD COLUMN current_otp VARCHAR(6);',
+                    'ALTER TABLE "user" ADD COLUMN otp_expiry TIMESTAMP;',
+                    'ALTER TABLE delivery_agent ADD COLUMN profile_pic_url VARCHAR(500) DEFAULT \'\';',
+                    'ALTER TABLE delivery_agent ADD COLUMN email_verified BOOLEAN DEFAULT FALSE;',
+                    'ALTER TABLE delivery_agent ADD COLUMN phone_verified BOOLEAN DEFAULT FALSE;',
+                    'ALTER TABLE delivery_agent ADD COLUMN current_otp VARCHAR(6);',
+                    'ALTER TABLE delivery_agent ADD COLUMN otp_expiry TIMESTAMP;'
+                ]
+                for stmt in statements:
+                    try:
+                        conn.execute(text(stmt))
+                    except Exception:
+                        pass  # Ignore if column already exists
         except Exception as e:
             app.logger.warning(f"Auto-migration skipped: {e}")
 
