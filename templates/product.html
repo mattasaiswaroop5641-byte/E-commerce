@@ -161,8 +161,8 @@
                     {% if current_user.is_authenticated %}
                     <form action="{{ url_for('add_product_review', product_id=product.product_id) }}" method="post">
                         <div class="mb-3">
-                            <label class="form-label">Rating</label>
-                            <select name="rating" class="form-select" required>
+                            <label class="form-label" for="rating">Rating</label>
+                            <select name="rating" id="rating" class="form-select" required>
                                 <option value="5">5 Stars - Excellent</option>
                                 <option value="4">4 Stars - Good</option>
                                 <option value="3">3 Stars - Average</option>

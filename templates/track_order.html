@@ -4,6 +4,11 @@
 {% block body_class %}track-page{% endblock %}
 
 {% block content %}
+<style>
+    .destination-map-iframe { border: 0; border-radius: 6px; }
+    .feedback-input { max-width: 250px; }
+    .tip-input { max-width: 80px; }
+</style>
 <section class="page-hero">
     <div class="container-xxl">
         <div class="page-hero__shell reveal-up">
@@ -68,7 +73,7 @@
                 <div class="order-tracking-section mb-4">
                     <h2><span class="spinner-grow spinner-grow-sm text-danger me-2" role="status" aria-hidden="true"></span>Live Destination Map</h2>
                     <div class="p-2 border rounded-3 bg-light shadow-sm">
-                        <iframe width="100%" height="300" style="border:0; border-radius: 6px;" loading="lazy" allowfullscreen src="https://maps.google.com/maps?q={{ (order.customer.address ~ ' ' ~ order.customer.city ~ ' ' ~ order.customer.postal_code)|urlencode }}&t=&z=14&ie=UTF8&iwloc=&output=embed"></iframe>
+                        <iframe width="100%" height="300" class="destination-map-iframe" loading="lazy" allowfullscreen title="Live Destination Map" src="https://maps.google.com/maps?q={{ (order.customer.address ~ ' ' ~ order.customer.city ~ ' ' ~ order.customer.postal_code)|urlencode }}&t=&z=14&ie=UTF8&iwloc=&output=embed"></iframe>
                     </div>
                     <p class="text-muted small mt-2 mb-0"><i class="bi bi-info-circle"></i> Map shows your delivery destination. Your agent <strong>{{ order.summary.get('agent_name', '') }}</strong> is currently en route.</p>
                 </div>
@@ -107,17 +112,17 @@
                 <div class="mt-4 pt-3 border-top">
                     <h4>Rate your delivery</h4>
                     <form action="{{ url_for('rate_delivery', tracking_number=order.tracking_number) }}" method="POST" class="d-flex flex-wrap align-items-center gap-2 mt-2">
-                        <select name="rating" class="form-select w-auto" required>
+                        <select name="rating" class="form-select w-auto" aria-label="Delivery Rating" required>
                             <option value="5" selected>5 - Excellent</option>
                             <option value="4">4 - Good</option>
                             <option value="3">3 - Okay</option>
                             <option value="2">2 - Poor</option>
                             <option value="1">1 - Terrible</option>
                         </select>
-                        <input type="text" name="feedback" class="form-control" style="max-width: 250px;" placeholder="Optional feedback...">
+                        <input type="text" name="feedback" class="form-control feedback-input" placeholder="Optional feedback...">
                         <div class="input-group w-auto">
                             <span class="input-group-text"><i class="bi bi-currency-rupee"></i></span>
-                            <input type="number" name="tip" class="form-control" style="max-width: 80px;" placeholder="Tip" min="0">
+                            <input type="number" name="tip" class="form-control tip-input" placeholder="Tip" min="0">
                         </div>
                         <button type="submit" class="btn btn-primary text-nowrap">Submit Rating</button>
                     </form>

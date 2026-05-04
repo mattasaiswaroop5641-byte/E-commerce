@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Invoice - {{ order.id }}</title>
     <style>
         body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; line-height: 1.5; margin: 0; padding: 40px; background-color: #f4f6f8; }
@@ -21,6 +22,7 @@
         .totals table tr.total-row h3 { margin: 0; border-top: 2px solid #333; padding-top: 10px; }
         .footer { text-align: center; margin-top: 50px; color: #888; font-size: 14px; clear: both; }
         .print-btn { display: block; width: 200px; margin: 20px auto; padding: 12px; text-align: center; background: #000; color: #fff; text-decoration: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
+        .variant-label-text { color: #666; }
         @media print {
             body { background-color: #fff; padding: 0; }
             .invoice-box { box-shadow: none; border: 0; padding: 0; }
@@ -63,7 +65,7 @@
             <thead><tr><th>Item Description</th><th class="text-right">Qty</th><th class="text-right">Price</th><th class="text-right">Amount</th></tr></thead>
             <tbody>
                 {% for item in order['items'] %}
-                <tr><td><strong>{{ item.name }}</strong><br><small style="color:#666;">{{ item.variant_label }}</small></td><td class="text-right">{{ item.quantity }}</td><td class="text-right">{{ item.price_display }}</td><td class="text-right">₹{{ "%.2f"|format(item.price * item.quantity) }}</td></tr>
+                <tr><td><strong>{{ item.name }}</strong><br><small class="variant-label-text">{{ item.variant_label }}</small></td><td class="text-right">{{ item.quantity }}</td><td class="text-right">{{ item.price_display }}</td><td class="text-right">₹{{ "%.2f"|format(item.price * item.quantity) }}</td></tr>
                 {% endfor %}
             </tbody>
         </table>
