@@ -11,7 +11,8 @@ class User(UserMixin, db.Model):
     id: int = db.Column(db.Integer, primary_key=True)
     username: str = db.Column(db.String(150), unique=True, nullable=False)
     email: str = db.Column(db.String(150), unique=True, nullable=False)
-    password_hash: str = db.Column(db.String(128), nullable=False)
+    # Use TEXT to accommodate longer password hashes (bcrypt/scrypt formats).
+    password_hash: str = db.Column(db.Text, nullable=False)
     phone: str = db.Column(db.String(40), nullable=False, default="")
     profile_pic_url: str = db.Column(db.String(500), nullable=False, default="")
     email_verified: bool = db.Column(db.Boolean, nullable=False, default=False)
@@ -243,7 +244,8 @@ class DeliveryAgent(db.Model):
     name: str = db.Column(db.String(100), nullable=False)
     phone: str = db.Column(db.String(20), nullable=False)
     email: str = db.Column(db.String(120), unique=True, nullable=False, index=True)
-    password_hash: str = db.Column(db.String(256), nullable=False)
+    # Use TEXT for delivery agent password hashes as well.
+    password_hash: str = db.Column(db.Text, nullable=False)
     active: bool = db.Column(db.Boolean, default=True, index=True)
     profile_pic_url: str = db.Column(db.String(500), nullable=False, default="")
     email_verified: bool = db.Column(db.Boolean, nullable=False, default=False)

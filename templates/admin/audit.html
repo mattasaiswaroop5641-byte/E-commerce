@@ -26,7 +26,7 @@
                         <td><span class="badge bg-secondary">{{ entry.action }}</span></td>
                         <td>{{ entry.target_type }}{% if entry.target_id %}: {{ entry.target_id }}{% endif %}</td>
                         <td><code>{{ entry.ip_address }}</code></td>
-                        <td class="text-truncate" style="max-width: 250px;" title="{{ entry.detail }}">{{ entry.detail }}</td>
+                        <td class="text-truncate truncate-250" title="{{ entry.detail }}">{{ entry.detail }}</td>
                     </tr>
                     {% else %}
                     <tr><td colspan="6" class="text-center py-4">No audit logs found.</td></tr>

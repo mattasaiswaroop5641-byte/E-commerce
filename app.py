@@ -16,6 +16,9 @@ from dotenv import load_dotenv
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash
+from werkzeug.exceptions import HTTPException
+from werkzeug.middleware.proxy_fix import ProxyFix
+from sqlalchemy import text, inspect
 
 from admin_forms import AdminDiscountForm, AdminLoginForm, AdminOrderStatusForm, AdminProductForm, AdminTicketUpdateForm, DeliveryLoginForm, DeliveryStatusForm, DeliverySignupForm, AgentProfileForm
 from forms import LoginForm, SignupForm, UserProfileForm, OTPForm
@@ -42,7 +45,24 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "your-secret-key-here-change-in-production")
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///site.db")
+
+# When deployed behind a trusted proxy (e.g., Render), honor X-Forwarded headers so
+# Flask sets cookies correctly (scheme/address). This helps CSRF and session cookies work
+# when TLS is terminated by the platform.
+if os.environ.get("FLASK_ENV", "").lower() == "production":
+    try:
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+        app.config.setdefault("SESSION_COOKIE_SECURE", True)
+        app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
+        app.logger.info("Applied ProxyFix and set SESSION_COOKIE_SECURE=True, SESSION_COOKIE_SAMESITE=Lax")
+    except Exception:
+        app.logger.exception("Failed to apply ProxyFix; continuing without it.")
+
+# --- FIX: Automatically fix Neon's postgres:// prefix and bypass stale SQLite files ---
+db_url = os.environ.get("DATABASE_URL", "sqlite:///shadowmarket_live.db")
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app) # type: ignore
@@ -52,21 +72,142 @@ login_manager.login_view = "login" # type: ignore
 _db_initialized = False
 _mail_config_logged = False
 _admin_config_logged = False
+_db_config_logged = False
 _admin_failed_attempts: dict[str, list[float]] = {}
+
+def log_database_configuration_once() -> None:
+    global _db_config_logged
+    if _db_config_logged:
+        return
+    _db_config_logged = True
+
+    uri = str(app.config.get("SQLALCHEMY_DATABASE_URI", "") or "").strip()
+    if not uri:
+        app.logger.warning("Database configured: <empty SQLALCHEMY_DATABASE_URI>")
+        return
+
+    if uri.startswith("sqlite:"):
+        app.logger.info("Database configured: SQLite (%s)", uri)
+        return
+
+    try:
+        parsed = urllib.parse.urlparse(uri)
+        host = str(parsed.hostname or "").strip() or "<unknown-host>"
+        port = f":{parsed.port}" if parsed.port else ""
+        db_name = (parsed.path or "").lstrip("/") or "<unknown-db>"
+        app.logger.info("Database configured: %s (host=%s%s db=%s)", parsed.scheme, host, port, db_name)
+    except Exception:
+        app.logger.info("Database configured: %s", uri.split("@")[-1])
+
+
+def ensure_runtime_schema() -> None:
+    """Best-effort schema patching for small incremental model changes.
+
+    This project intentionally avoids Alembic migrations. To prevent production 500s after
+    adding new columns to existing tables, we patch the schema at boot if columns are missing.
+    """
+    try:
+        with db.engine.begin() as conn: # type: ignore[attr-defined]
+            inspector = inspect(conn)
+            dialect = str(getattr(conn.dialect, "name", "") or "").lower()
+            is_postgres = dialect.startswith("postgres")
+
+            def existing_columns(table_name: str) -> set[str]:
+                return {str(col.get("name") or "") for col in inspector.get_columns(table_name)}
+
+            def add_column(table_name: str, column_sql: str) -> None:
+                # Column/table names are constant strings inside this function.
+                if is_postgres:
+                    conn.execute(text(f'ALTER TABLE "{table_name}" ADD COLUMN IF NOT EXISTS {column_sql}'))
+                else:
+                    conn.execute(text(f'ALTER TABLE "{table_name}" ADD COLUMN {column_sql}'))
+
+            # Customer verification/profile columns (added April 2026).
+            user_cols = existing_columns("user")
+            if "profile_pic_url" not in user_cols:
+                add_column("user", "profile_pic_url VARCHAR(500) NOT NULL DEFAULT ''")
+            if "email_verified" not in user_cols:
+                add_column("user", f"email_verified BOOLEAN NOT NULL DEFAULT {'FALSE' if is_postgres else '0'}")
+            if "phone_verified" not in user_cols:
+                add_column("user", f"phone_verified BOOLEAN NOT NULL DEFAULT {'FALSE' if is_postgres else '0'}")
+            if "current_otp" not in user_cols:
+                add_column("user", "current_otp VARCHAR(6)")
+            if "otp_expiry" not in user_cols:
+                add_column("user", "otp_expiry TIMESTAMP")
+
+            # Delivery agent verification/profile columns (added April 2026).
+            agent_cols = existing_columns("delivery_agent")
+            if "profile_pic_url" not in agent_cols:
+                add_column("delivery_agent", "profile_pic_url VARCHAR(500) NOT NULL DEFAULT ''")
+            if "email_verified" not in agent_cols:
+                add_column("delivery_agent", f"email_verified BOOLEAN NOT NULL DEFAULT {'FALSE' if is_postgres else '0'}")
+            if "phone_verified" not in agent_cols:
+                add_column("delivery_agent", f"phone_verified BOOLEAN NOT NULL DEFAULT {'FALSE' if is_postgres else '0'}")
+            if "current_otp" not in agent_cols:
+                add_column("delivery_agent", "current_otp VARCHAR(6)")
+            if "otp_expiry" not in agent_cols:
+                add_column("delivery_agent", "otp_expiry TIMESTAMP")
+
+            # Ensure password_hash columns are wide enough to store modern password hashes.
+            try:
+                if is_postgres:
+                    # Widen `user.password_hash` to TEXT if it's a VARCHAR.
+                    try:
+                        user_cols_info = inspector.get_columns("user")
+                        for col in user_cols_info:
+                            if str(col.get("name") or "") == "password_hash":
+                                col_type = str(col.get("type") or "").lower()
+                                if "varchar" in col_type:
+                                    conn.execute(text('ALTER TABLE "user" ALTER COLUMN password_hash TYPE TEXT'))
+                                    app.logger.info("Patched user.password_hash to TEXT (was %s)", col_type)
+                                break
+                    except Exception:
+                        app.logger.exception("Failed to inspect/alter user.password_hash")
+
+                    # Widen `delivery_agent.password_hash` to TEXT if it's a VARCHAR.
+                    try:
+                        agent_cols_info = inspector.get_columns("delivery_agent")
+                        for col in agent_cols_info:
+                            if str(col.get("name") or "") == "password_hash":
+                                col_type = str(col.get("type") or "").lower()
+                                if "varchar" in col_type:
+                                    conn.execute(text('ALTER TABLE "delivery_agent" ALTER COLUMN password_hash TYPE TEXT'))
+                                    app.logger.info("Patched delivery_agent.password_hash to TEXT (was %s)", col_type)
+                                break
+                    except Exception:
+                        app.logger.exception("Failed to inspect/alter delivery_agent.password_hash")
+            except Exception:
+                app.logger.exception("Failed to widen password_hash columns")
+
+    except Exception:
+        app.logger.exception("Schema bootstrap failed (continuing without schema patch).")
+
 
 @app.before_request
 def initialize_database():
     global _db_initialized
     if not _db_initialized:
+        log_database_configuration_once()
         log_mail_configuration_once()
         log_admin_configuration_once()
         db.create_all() # type: ignore
+        ensure_runtime_schema()
+
         _db_initialized = True
+
+
+@app.errorhandler(Exception)
+def handle_unhandled_exception(exc: Exception):
+    if isinstance(exc, HTTPException):
+        return exc
+    error_id = uuid4().hex[:10]
+    app.logger.exception("Unhandled exception [%s] on %s %s", error_id, request.method, request.path)
+    return render_template("500.html", error_id=error_id), 500
 
 SITE_NAME = "ShadowMarket"
 PLACEHOLDER_IMAGE_PATH = "/static/images/product-placeholder.svg"
-FREE_SHIPPING_THRESHOLD = 150.0
-STANDARD_SHIPPING_FEE = 12.0
+FREE_SHIPPING_THRESHOLD = 499.0
+STANDARD_SHIPPING_FEE = 40.0
 ESTIMATED_TAX_RATE = 0.08
 HOME_HERO_FAMILY_ID = "electronics-macbook-air-m3"
 RESULTS_PER_PAGE = 12
@@ -867,6 +1008,14 @@ def init_recommenders(force_reload: bool = False) -> None:
     if catalog_ready and not force_reload:
         return
 
+    # Allow disabling heavy recommender training on low-memory or free-tier
+    # hosts while still loading the product catalog (if present). When
+    # `SKIP_INIT_RECOMMENDERS` is set, the CSV/catalog is loaded but the
+    # expensive TF-IDF / collaborative training steps are skipped.
+    skip_init_recommenders = str(os.environ.get("SKIP_INIT_RECOMMENDERS", "")).strip().lower() in {"1", "true", "yes"}
+    if skip_init_recommenders:
+        app.logger.info("SKIP_INIT_RECOMMENDERS=true; catalog will be loaded but recommender training will be skipped")
+
     _product_sales_cache = {}
     try:
         all_orders = Order.query.filter(Order.status != "canceled").all() # type: ignore
@@ -881,7 +1030,34 @@ def init_recommenders(force_reload: bool = False) -> None:
 
     csv_path = os.path.join(os.path.dirname(__file__), "data", "products.csv")
     if not os.path.exists(csv_path):
-        products_df = pd.DataFrame()
+        # If the products CSV is missing (e.g., not included in the runtime
+        # container), create an empty DataFrame with the columns other code
+        # expects so template/context injection won't crash when accessing
+        # `product_id`, `price`, etc.
+        cols = [
+            "product_id",
+            "product_family_id",
+            "name",
+            "price",
+            "category",
+            "subcategory",
+            "brand",
+            "description",
+            "variant_type",
+            "variant_value",
+            "variant_label",
+            "is_default",
+            "thumb_image_url",
+            "hero_image_url",
+            "image_url",
+            "active",
+        ]
+        products_df = pd.DataFrame(columns=cols)
+        products_df["product_id"] = pd.Series(dtype="Int64")
+        products_df["price"] = pd.Series(dtype="float64")
+        products_df["is_default"] = pd.Series(dtype="boolean")
+        products_df["active"] = pd.Series(dtype="boolean")
+
         family_rows_by_id = {}
         family_cards_by_id = {}
         category_cards_cache = []
@@ -889,6 +1065,7 @@ def init_recommenders(force_reload: bool = False) -> None:
         cb_recommender = None
         collab_recommender = None
         catalog_ready = True
+        app.logger.warning("products.csv not found; catalog initialized empty")
         return
 
     products_df = pd.read_csv(csv_path).fillna("")
@@ -945,6 +1122,16 @@ def init_recommenders(force_reload: bool = False) -> None:
 
     products_df["product_id"] = pd.to_numeric(products_df["product_id"], errors="coerce").fillna(0).astype(int)
     products_df["price"] = pd.to_numeric(products_df["price"], errors="coerce").fillna(0.0)
+
+    # --- FIX 3: Scale all dataset prices to realistic IRL Rupee prices globally ---
+    def scale_to_inr(p: float) -> float:
+        if 0 < p < 5000:
+            scaled = round(p * 83.0)
+            return float((scaled // 100) * 100 + 99)
+        return float(round(p, 2))
+        
+    products_df["price"] = products_df["price"].apply(scale_to_inr)
+
     products_df["product_family_id"] = products_df["product_family_id"].astype(str).str.strip()
     missing_family_mask = products_df["product_family_id"] == ""
     if missing_family_mask.any():
@@ -990,11 +1177,23 @@ def init_recommenders(force_reload: bool = False) -> None:
         "category_count": int(products_df["category"].nunique()), # type: ignore
     }
 
-    cb_recommender = ContentRecommender()
-    cb_recommender.fit()
+    # Initialize content recommender. Training is potentially expensive;
+    # when `SKIP_INIT_RECOMMENDERS` is set we avoid fitting the model.
+    if not skip_init_recommenders:
+        cb_recommender = ContentRecommender()
+        def _fit_cb():
+            try:
+                cb_recommender.fit()
+                app.logger.info("Content recommender training completed")
+            except Exception:
+                app.logger.exception("Content recommender training failed")
+
+        threading.Thread(target=_fit_cb, daemon=True).start()
+    else:
+        cb_recommender = None
 
     interactions_path = os.path.join(os.path.dirname(__file__), "data", "interactions.csv")
-    if os.path.exists(interactions_path):
+    if os.path.exists(interactions_path) and not skip_init_recommenders:
         collab_recommender = CollabRecommender(n_components=10)
         # Lazy load collab model - don't train on startup to prevent timeout
     else:
@@ -1089,6 +1288,7 @@ def search_product_rows(query: str) -> Any:
         "variant_label",
         "description",
     ]
+    searchable_columns = [col for col in searchable_columns if col in products_df.columns]
 
     haystack = (
         products_df[searchable_columns]
@@ -1117,7 +1317,7 @@ def build_pagination(items: list[dict[str, Any]], page: int, per_page: int = RES
     page_items = items[start_index:end_index]
 
     def build_page_url(target_page: int) -> str:
-        params = request.args.to_dict()
+        params = request.values.to_dict()
         if target_page <= 1:
             params.pop("page", None)
         else:
@@ -1761,6 +1961,8 @@ def send_otp_email_async(recipient_email: str, otp: str) -> None:
 def send_otp_sms_mock(phone: str, otp: str) -> None:
     # MOCK SMS SENDER: Replace with Twilio API in production!
     app.logger.warning(f"\n{'='*50}\n[MOCK SMS API] Sent to {phone}:\nYour ShadowMarket OTP is {otp}\n{'='*50}\n")
+    # --- FIX 2: Flash the SMS directly on the screen so you can test it without a Twilio account! ---
+    flash(f"📱 [TEST MODE SMS] Message sent to {phone}: Your OTP is {otp}", "info")
 
 
 def send_welcome_email_async(
@@ -2612,6 +2814,19 @@ def signup():
         flash("Account created successfully. Please sign in.", "success")
         return redirect(url_for("login"))
     elif request.method == "POST":
+        # Log details to help debug validation failures in deployed environments.
+        try:
+            csrf_field = app.config.get("WTF_CSRF_FIELD_NAME", "csrf_token")
+            csrf_present = bool(request.form.get(csrf_field))
+            session_keys = list(session.keys())
+            app.logger.warning(
+                "Signup validation failed (errors=%s, csrf_present=%s, session_keys=%s)",
+                form.errors,
+                csrf_present,
+                session_keys,
+            )
+        except Exception:
+            app.logger.exception("Failed to log signup debug info")
         flash("Please fix the highlighted signup fields and try again.", "warning")
 
     return render_template("signup.html", form=form)
@@ -2633,7 +2848,7 @@ def about():
 @app.route("/search", methods=["GET", "POST"])
 def search():
     ensure_catalog_loaded()
-    query = (request.values.get("query") or "").strip()
+    query = (request.values.get("q") or request.values.get("query") or "").strip()
     selected_sort = normalize_sort(request.values.get("sort"))
     current_page = normalize_page(request.values.get("page"))
     matched_rows = search_product_rows(query)
@@ -3820,6 +4035,35 @@ def auto_verify_pending_payments() -> None:
     if dirty:
         db.session.commit() # type: ignore
 
+# Register debug endpoint at import time only when SIGNUP_DEBUG_TOKEN env is set.
+if os.environ.get("SIGNUP_DEBUG_TOKEN"):
+    @app.route("/_debug/signup-inspect", methods=["GET", "POST"])
+    def debug_signup_inspect():
+        expected_token = os.environ.get("SIGNUP_DEBUG_TOKEN", "")
+        token = request.args.get("token") or request.form.get("token") or request.headers.get("X-Debug-Token", "")
+        if token != expected_token:
+            return ("Not authorized", 403)
+
+        try:
+            headers = dict(request.headers)
+            form = request.form.to_dict()
+            cookies = dict(request.cookies)
+            data = {
+                "method": request.method,
+                "path": request.path,
+                "remote_addr": request.remote_addr,
+                "headers": headers,
+                "cookies": cookies,
+                "form": form,
+                "session_keys": list(session.keys()),
+                "csrf_present": bool(form.get(app.config.get("WTF_CSRF_FIELD_NAME", "csrf_token"))),
+            }
+            app.logger.warning("DEBUG_SIGNUP_INSPECT: %s", data)
+            return jsonify({"status": "ok", "data": data})
+        except Exception:
+            app.logger.exception("DEBUG_SIGNUP_INSPECT failed")
+            return ("error", 500)
+
 if __name__ == "__main__":
     from data.generate_dataset import create_interactions, create_products
 
@@ -3850,5 +4094,6 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all() # type: ignore
         init_recommenders(force_reload=True)
+    # Debug endpoint is registered at import time when enabled via SIGNUP_DEBUG_TOKEN.
 
     app.run(host="0.0.0.0", port=5000, debug=True)

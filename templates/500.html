@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Server Error | {{ site_name }}{% endblock %}
+
+{% block content %}
+<section class="section-shell py-5">
+    <div class="container-xxl text-center">
+        <div class="py-5">
+            <i class="bi bi-exclamation-triangle text-danger display-1 mb-4"></i>
+            <h1 class="fw-bold mb-3">Something went wrong.</h1>
+            <p class="text-muted lead mb-4">
+                We encountered an internal server error while processing your request.
+            </p>
+            <div class="bg-light p-4 rounded-3 d-inline-block mb-4 border">
+                <p class="mb-1 text-muted small text-uppercase fw-bold">Error Reference ID</p>
+                <code class="fs-5 user-select-all">{{ error_id }}</code>
+            </div>
+            <div>
+                <p class="text-muted small">Please check your Render deployment logs for this ID to see the exact traceback.</p>
+                <a href="{{ url_for('index') }}" class="btn btn-dark mt-3">Return to Homepage</a>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
